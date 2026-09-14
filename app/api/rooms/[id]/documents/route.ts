@@ -29,8 +29,15 @@ export async function POST(
       const bytes = Buffer.from(await file.arrayBuffer());
       if (bytes.subarray(0, 5).toString() !== "%PDF-")
         throw new HttpError(400, "This is not a valid PDF.");
-      const pdf = (await import("pdf-parse/lib/pdf-parse.js")).default;
-      text = (await pdf(bytes)).text;
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: new Uint8Array(bytes) });
+      try {
+        text = (await parser.getText()).text;
+      } catch {
+        throw new HttpError(400, "This PDF could not be read. Use an unencrypted, selectable-text PDF or paste its text.");
+      } finally {
+        await parser.destroy();
+      }
       filename = file.name.slice(0, 200);
     }
     if (text.length < 20 || text.length > 180000)
