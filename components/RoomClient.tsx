@@ -17,7 +17,7 @@ export default function RoomClient({id}:{id:string}){
   const socket=useRef<Socket|null>(null),scroll=useRef<HTMLDivElement>(null),offset=useRef(0),participant=useRef(''),clicked=useRef(new Set<string>());
   const load=useCallback(async()=>{const r=await fetch(`/api/rooms/${id}`);if(!r.ok)return;const body=await r.json();setData(body);setMessages(body.messages);setSelected(s=>s||body.documents[0]?.id||'');return body;},[id]);
   useEffect(()=>()=>{socket.current?.disconnect();},[]);
-  useEffect(()=>{if(!joined)return;const timer=setInterval(()=>void load(),30000);return()=>clearInterval(timer);},[joined,load]);
+  useEffect(()=>{if(!joined)return;const timer=setInterval(()=>{if(!messages.some(m=>m.status==='streaming'))void load();},30000);return()=>clearInterval(timer);},[joined,load,messages]);
   useEffect(()=>{scroll.current?.scrollTo({top:scroll.current.scrollHeight,behavior:'smooth'});},[messages]);
   useEffect(()=>{if(active[0]) document.getElementById(`chunk-${active[0]}`)?.scrollIntoView({behavior:'smooth',block:'center'});},[active,selected]);
   useEffect(()=>{if(!question)return;const tick=()=>setRemaining(Math.max(0,Math.ceil((question.endsAt-(Date.now()+offset.current))/1000)));tick();const timer=setInterval(tick,200);return()=>clearInterval(timer);},[question]);

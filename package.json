@@ -2,6 +2,7 @@
   "name": "study-room",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
@@ -45,7 +46,7 @@
     "typescript": "^5.9.2"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "22.x"
   },
   "overrides": {
     "protobufjs": "^7.6.3",

@@ -11,7 +11,7 @@ import { generateQuestion } from '../lib/quiz';
 import { properScoringRule, validateDistribution } from '../lib/scoring/properScoringRule';
 import { buildSummary } from '../lib/summary';
 import type { Room, QuizQuestion } from '@prisma/client';
-type Round={question:QuizQuestion;eligible:Set<string>;submissions:Map<string,number[]>;locking:boolean;timer:NodeJS.Timeout};
+type Round={question:QuizQuestion;eligible:Set<string>;submissions:Map<string,number[]>;writes:Set<Promise<unknown>>;locking:boolean;timer:NodeJS.Timeout};
 type State={heat:Heatmap;answering:boolean;ending:boolean;generating:boolean;round?:Round;simplified:Set<string>;lastUsed:number};
 const states=new Map<string,State>();
 const loading=new Map<string,Promise<State>>();
@@ -53,6 +53,9 @@ async function reveal(roomId:string,round:Round) {
   if(round.locking) return;
   round.locking=true;clearTimeout(round.timer);
   try {
+    // A deadline or the last participant can arrive while earlier DB writes are
+    // still in flight. Reveal waits for them so nobody's accepted answer vanishes.
+    await Promise.allSettled([...round.writes]);
     await db.quizQuestion.update({where:{id:round.question.id},data:{lockedAt:new Date()}});
     const results=await db.quizResult.findMany({where:{quizQuestionId:round.question.id},include:{participant:{select:{displayName:true}}}});
     io.to(channel(roomId)).emit('quiz-round-reveal',{questionId:round.question.id,correctOptionIndex:round.question.correctOptionIndex,explanation:round.question.explanation,results:results.map(r=>({participantId:r.participantId,displayName:r.participant.displayName,distribution:r.submittedDistribution,score:r.zeroProbability?null:r.score,zeroProbability:r.zeroProbability})),leaderboard:await leaderboard(roomId)});
@@ -123,7 +126,7 @@ io.on('connection',socket=>{
   on('quiz-question-start',async()=>{
     const room=await roomFor(socket,true);const s=await state(room.id);
     if(s.round||s.generating||s.ending)throw new Error('Finish the current round first.');s.generating=true;
-    try{const question=await generateQuestion(room);const round:Round={question,eligible:new Set(peers(room.id).map(p=>p.id)),submissions:new Map(),locking:false,timer:setTimeout(()=>{},0)};s.round=round;round.timer=setTimeout(()=>void reveal(room.id,round),Math.max(0,question.endsAt.getTime()-Date.now()));io.to(channel(room.id)).emit('quiz-question-start',publicQuestion(question));}finally{s.generating=false;}
+    try{const question=await generateQuestion(room);const round:Round={question,eligible:new Set(peers(room.id).map(p=>p.id)),submissions:new Map(),writes:new Set(),locking:false,timer:setTimeout(()=>{},0)};s.round=round;round.timer=setTimeout(()=>void reveal(room.id,round),Math.max(0,question.endsAt.getTime()-Date.now()));io.to(channel(room.id)).emit('quiz-question-start',publicQuestion(question));}finally{s.generating=false;}
   });
   on('quiz-submit',async payload=>{
     const {questionId,distribution}=z.object({questionId:z.string(),distribution:z.array(z.number()).length(4)}).parse(payload);validateDistribution(distribution);
@@ -134,7 +137,9 @@ io.on('connection',socket=>{
     // Reserve before awaiting persistence: duplicate submissions cannot race.
     round.submissions.set(id,distribution);
     const score=properScoringRule(distribution,round.question.correctOptionIndex);
-    try{await db.quizResult.create({data:{quizQuestionId:questionId,participantId:id,submittedDistribution:distribution,score:Number.isFinite(score)?score:0,zeroProbability:!Number.isFinite(score)}});}catch(e){round.submissions.delete(id);throw e;}
+    const write=db.quizResult.create({data:{quizQuestionId:questionId,participantId:id,submittedDistribution:distribution,score:Number.isFinite(score)?score:0,zeroProbability:!Number.isFinite(score)}}).then(r=>r);
+    round.writes.add(write);
+    try{await write;}catch(e){round.submissions.delete(id);throw e;}finally{round.writes.delete(write);}
     if(round.submissions.size>=round.eligible.size)await reveal(room.id,round);
   });
   on('end-session',async()=>{

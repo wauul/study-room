@@ -1,0 +1,10 @@
+.env
+.env.*
+.tools
+.cache
+node_modules
+.git
+tests
+samples
+docs
+deploy
