@@ -20,19 +20,19 @@ The frontend runs on port 3000 and the long-running Socket.io process on port 30
 
 Environment variables:
 
-| Variable | Purpose |
-| --- | --- |
-| DATABASE_URL | Neon Postgres connection URI, with SSL |
-| NEXTAUTH_SECRET | Random secret shared by web and socket servers |
-| NEXTAUTH_URL | Canonical web URL |
-| GROQ_API_KEY | Groq generation credential |
-| GROQ_MODEL | Defaults to `openai/gpt-oss-20b` |
-| RESEND_API_KEY | Sending-only Resend credential |
-| RESEND_FROM | Verified sender, e.g. `Study Room <study@example.com>` |
-| SOCKET_SERVER_URL | Public HTTPS socket host URL, or localhost in development |
-| APP_ORIGIN | Allowed frontend origin(s), comma separated, on the socket host |
-| PORT | Socket host port (provider-managed on Render) |
-| HF_HOME | Optional writable model cache directory |
+| Variable          | Purpose                                                         |
+| ----------------- | --------------------------------------------------------------- |
+| DATABASE_URL      | Neon Postgres connection URI, with SSL                          |
+| NEXTAUTH_SECRET   | Random secret shared by web and socket servers                  |
+| NEXTAUTH_URL      | Canonical web URL                                               |
+| GROQ_API_KEY      | Groq generation credential                                      |
+| GROQ_MODEL        | Defaults to `openai/gpt-oss-20b`                                |
+| RESEND_API_KEY    | Sending-only Resend credential                                  |
+| RESEND_FROM       | Verified sender, e.g. `Study Room <study@example.com>`          |
+| SOCKET_SERVER_URL | Public HTTPS socket host URL, or localhost in development       |
+| APP_ORIGIN        | Allowed frontend origin(s), comma separated, on the socket host |
+| PORT              | Socket host port (provider-managed on Render)                   |
+| HF_HOME           | Optional writable model cache directory                         |
 
 Next.js 15 replaces the originally requested 14 with user approval to use a maintained security release. Groq retired `llama-3.1-8b-instant` for free-tier accounts on August 16, 2026; the model is configurable and defaults to its recommended replacement. Transitive dependency overrides patch known advisories; test the embedding pipeline when upgrading them.
 

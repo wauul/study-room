@@ -1,50 +1,1117 @@
-'use client';
-import { useCallback,useEffect,useRef,useState } from 'react';
-import { io,Socket } from 'socket.io-client';
-import { BookOpen,FileText,Plus,Link as LinkIcon,ArrowUpRight,Send,MessageCircle,ChartNoAxesCombined,Hand,Users,X,Check,Clock,Leaf } from 'lucide-react';
-import Header from './Header';
-type Chunk={id:string;content:string;sectionLabel:string|null;position:number};
-type Doc={id:string;filename:string;sourceType:string;chunks:Chunk[]};
-type Citation={id:string;sectionLabel:string|null;filename:string;similarity:number};
-type Message={id:string;content:string;participantId:string|null;displayName?:string;kind:string;status:string;citations?:Citation[];lostCount?:number};
-type Question={id:string;questionText:string;options:string[];endsAt:number;serverNow:number;styledAfterPastExam:boolean};
-type Result={participantId:string;displayName:string;distribution:number[];score:number|null;zeroProbability:boolean};
-type Leader={participantId:string;displayName:string;score:number;zeroProbability:boolean;rounds:number};
-type Reveal={questionId:string;correctOptionIndex:number;explanation:string;results:Result[];leaderboard:Leader[]};
-type RoomData={room:{id:string;name:string;status:string;studyFocusRaw:string};documents:Doc[];messages:Message[];isHost:boolean};
-export default function RoomClient({id}:{id:string}){
-  const [data,setData]=useState<RoomData|null>(null),[joined,setJoined]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[connected,setConnected]=useState(false),[isHost,setHost]=useState(false),[messages,setMessages]=useState<Message[]>([]),[people,setPeople]=useState<{id:string;displayName:string}[]>([]),[heat,setHeat]=useState<Record<string,number>>({}),[active,setActive]=useState<string[]>([]),[selected,setSelected]=useState(''),[mode,setMode]=useState<'qa'|'quiz'>('qa'),[modal,setModal]=useState<'upload'|'focus'|'end'|null>(null),[busy,setBusy]=useState(false),[question,setQuestion]=useState<Question|null>(null),[reveal,setReveal]=useState<Reveal|null>(null),[distribution,setDistribution]=useState([25,25,25,25]),[submitted,setSubmitted]=useState(false),[eligible,setEligible]=useState(true),[leaders,setLeaders]=useState<Leader[]>([]),[remaining,setRemaining]=useState(20),[ending,setEnding]=useState(false);
-  const socket=useRef<Socket|null>(null),scroll=useRef<HTMLDivElement>(null),offset=useRef(0),participant=useRef(''),clicked=useRef(new Set<string>());
-  const load=useCallback(async()=>{const r=await fetch(`/api/rooms/${id}`);if(!r.ok)return;const body=await r.json();setData(body);setMessages(body.messages);setSelected(s=>s||body.documents[0]?.id||'');return body;},[id]);
-  useEffect(()=>()=>{socket.current?.disconnect();},[]);
-  useEffect(()=>{if(!joined)return;const timer=setInterval(()=>{if(!messages.some(m=>m.status==='streaming'))void load();},30000);return()=>clearInterval(timer);},[joined,load,messages]);
-  useEffect(()=>{scroll.current?.scrollTo({top:scroll.current.scrollHeight,behavior:'smooth'});},[messages]);
-  useEffect(()=>{if(active[0]) document.getElementById(`chunk-${active[0]}`)?.scrollIntoView({behavior:'smooth',block:'center'});},[active,selected]);
-  useEffect(()=>{if(!question)return;const tick=()=>setRemaining(Math.max(0,Math.ceil((question.endsAt-(Date.now()+offset.current))/1000)));tick();const timer=setInterval(tick,200);return()=>clearInterval(timer);},[question]);
-  async function join(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const displayName=String(new FormData(e.currentTarget).get('displayName'));try{const r=await fetch(`/api/rooms/${id}/join`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName})});const body=await r.json();if(r.status===401){window.location.href=`/login?next=/rooms/${id}`;return;}if(!r.ok)throw new Error(body.error);participant.current=body.participantId;setHost(body.isHost);await load();setJoined(true);
-    const s=io(body.socketUrl,{auth:{token:body.token},transports:['websocket','polling'],reconnection:true});socket.current=s;
-    s.on('connect',()=>{setConnected(true);setError('');s.emit('join-room',{},()=>{});void load();});s.on('disconnect',()=>setConnected(false));s.on('connect_error',()=>{setConnected(false);setError('Connecting to the study room… The free server may need a moment to wake up.');});s.on('room-error',(message:string)=>{setError(message);setBusy(false);setEnding(false);});
-    s.on('presence',setPeople);s.on('heatmap-update',setHeat);s.on('leaderboard',setLeaders);
-    s.on('chat-message',(message:Message)=>setMessages(old=>old.some(m=>m.id===message.id)?old:[...old,message]));
-    s.on('answer-start',(message:Message)=>setMessages(old=>old.some(m=>m.id===message.id)?old:[...old,message]));
-    s.on('answer-chunk',({messageId,token})=>setMessages(old=>old.map(m=>m.id===messageId?{...m,content:m.content+token}:m)));
-    s.on('answer-complete',({messageId,content,failed})=>{setMessages(old=>old.map(m=>m.id===messageId?{...m,content,status:failed?'failed':'complete'}:m));setBusy(false);});
-    s.on('chunk-highlight',({chunkIds})=>{setActive(chunkIds);setData(current=>{const doc=current?.documents.find(d=>d.chunks.some(c=>chunkIds.includes(c.id)));if(doc)setSelected(doc.id);return current;});});
-    s.on('lost-count',({messageId,count})=>setMessages(old=>old.map(m=>m.id===messageId?{...m,lostCount:count}:m)));
-    s.on('quiz-question-start',(q:Question)=>{offset.current=q.serverNow-Date.now();setQuestion(q);setReveal(null);setDistribution([25,25,25,25]);setSubmitted(false);setEligible(true);setMode('quiz');setBusy(false);});
-    s.on('quiz-submission-status',({submitted,eligible})=>{setSubmitted(submitted);setEligible(eligible);});
-    s.on('quiz-round-reveal',(value:Reveal)=>{setReveal(value);setLeaders(value.leaderboard);setBusy(false);});
-    s.on('session-ending',()=>setEnding(true));s.on('session-ended',()=>{window.location.href=`/rooms/${id}/summary`;});
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  function emit(event:string,payload:object={},callback?:(result:any)=>void){setError('');if(!socket.current?.connected){setError('Wait for the room to reconnect.');return;}socket.current.emit(event,payload,(r:any)=>{if(!r.ok)setError(r.error);callback?.(r);});}
-  async function upload(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');try{const r=await fetch(`/api/rooms/${id}/documents`,{method:'POST',body:new FormData(e.currentTarget)});const body=await r.json();if(!r.ok)throw new Error(body.error);await load();setSelected(body.id);setModal(null);setNotice(`${body.filename} is ready — ${body.chunks} passages added.`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  async function focus(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);try{const r=await fetch(`/api/rooms/${id}/study-focus`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({studyFocus:new FormData(e.currentTarget).get('studyFocus')})});const body=await r.json();if(!r.ok)throw new Error(body.error);await load();setModal(null);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  const doc=data?.documents.find(d=>d.id===selected),streaming=messages.some(m=>m.status==='streaming'),sum=distribution.reduce((a,b)=>a+b,0),maxHeat=Math.max(1,...Object.values(heat));
-  if(!joined)return <><Header/><main className="form-wrap"><BookOpen className="accent" size={38}/><h1 style={{marginTop:20}}>There’s a seat for you.</h1><p className="muted">Enter your name to join this study room. You’ll need to sign in if you haven’t already.</p><form onSubmit={join}><label>Your name at the table<input name="displayName" maxLength={50} required placeholder="Your first name"/></label>{error&&<p className="error" role="alert">{error}</p>}<button disabled={busy}>{busy?'Finding your seat…':'Join the table'}<ArrowUpRight size={16}/></button></form></main></>;
-  return <><Header/><div className="workspace-head"><div><div className="eyebrow">Your shared study table <span className="accent">/</span> {connected?'Connected':'Reconnecting'}</div><h1>{data?.room.name||'Study room'}</h1></div><div className="actions"><span className="tag"><span className="dot"/>{people.length} at the table</span><button className="secondary" onClick={async()=>{try{await navigator.clipboard.writeText(window.location.href);setNotice('Room link copied. Share it with your study group.');}catch{setNotice(window.location.href);}}}><LinkIcon size={14}/>Invite a friend</button>{isHost&&<button className="quiet" onClick={()=>setModal('end')}>Wrap up<ArrowUpRight size={14}/></button>}</div></div>
-  {error&&<div role="alert" className="error">{error}<button className="quiet" onClick={()=>setError('')} aria-label="Dismiss error"><X size={14}/></button></div>}{notice&&<div role="status" className="notice row between">{notice}<button className="quiet" onClick={()=>setNotice('')} aria-label="Dismiss notification"><X size={14}/></button></div>}{ending&&<div className="notice">Gathering the group’s lightbulb moments and next steps… Your rundown will open automatically.</div>}
-  <main className="workspace"><aside className="sidebar"><section><h2>On the table</h2>{data?.documents.map(d=><button key={d.id} className={`document-link ${d.id===selected?'active':''}`} onClick={()=>setSelected(d.id)}><FileText size={17}/><span>{d.filename}<small>{d.sourceType==='PAST_EXAM'?'Past exam · style reference':`${d.chunks.length} passages`}</small></span></button>)}{!data?.documents.length&&<p className="muted" style={{fontSize:12,lineHeight:1.7}}>No notes yet. Bring something to work through.</p>}{isHost&&<button className="quiet" style={{fontSize:11,marginTop:12}} onClick={()=>setModal('upload')}><Plus size={14}/>Add study material</button>}</section><section><div className="row between"><h2>Our focus</h2>{isHost&&<button className="quiet" aria-label="Edit study focus" onClick={()=>setModal('focus')}><ArrowUpRight size={13}/></button>}</div><p className="focus">{data?.room.studyFocusRaw||'Follow the questions. See where they take us.'}</p></section><section className="people-section"><h2>At the table</h2><div className="participants">{people.map(p=><div className="row" key={p.id}><span className="avatar">{p.displayName.slice(0,2).toUpperCase()}</span><span>{p.displayName}{p.id===participant.current?' (you)':''}</span><span className="dot" style={{marginLeft:'auto'}}/></div>)}</div></section><section style={{marginTop:'auto'}}><Leaf size={22} className="accent"/><p style={{fontFamily:'var(--serif)',fontStyle:'italic',fontSize:12,lineHeight:1.7,marginTop:10}}>Understanding takes a little time.<br/>You’re in good company.</p></section></aside>
-  <section className="work-area"><div className="viewer-toolbar"><span>{doc?'READING TOGETHER':'A FRESH PAGE'}</span><div className="heat-scale"><span>Less discussed</span>{[.1,.25,.5,.8].map(n=><i key={n} style={{opacity:n}}/>)}<span>More</span></div></div><article className="paper">{doc?<><div className="eyebrow">{doc.sourceType==='PAST_EXAM'?'Past paper / Style reference':'Course material / Shared notes'}</div><h2>{doc.filename.replace(/\.pdf$/i,'')}</h2>{doc.chunks.map((c,i)=><section id={`chunk-${c.id}`} key={c.id} className={`passage ${active.includes(c.id)?'selected':''}`} style={{backgroundColor:`rgba(var(--accent-rgb),${(heat[c.id]||0)/maxHeat*.22})`}}><div className="citation-label">PASSAGE {String(i+1).padStart(2,'0')}{active.includes(c.id)?' / IN THE CONVERSATION':''}</div>{c.sectionLabel&&<h3>{c.sectionLabel}</h3>}<p>{c.content}</p></section>)}<div className="paper-footer"><span>STUDY ROOM / YOUR SHARED COPY</span><span>{doc.chunks.length} passages</span></div></>:<div className="empty" style={{paddingTop:80}}><BookOpen size={60}/><h2>Start with a page.</h2><p style={{lineHeight:1.8,maxWidth:260}}>Upload your course notes or paste a passage. Your shared reading space will take shape here.</p>{isHost&&<button className="secondary" onClick={()=>setModal('upload')}><Plus size={15}/>Bring your notes</button>}</div>}</article></section>
-  <section className="chat-panel"><div className="tabs"><button className={mode==='qa'?'active':''} onClick={()=>setMode('qa')}><MessageCircle size={15}/>Study Q&A</button><button className={mode==='quiz'?'active':''} onClick={()=>setMode('quiz')}><ChartNoAxesCombined size={15}/>Confidence quiz</button></div>{mode==='qa'?<><div className="chat-scroll" ref={scroll}><p className="chat-intro">One conversation, shared by everyone.<br/>Ask a question. We’ll find the passage together.</p>{messages.length?messages.map(m=><article key={m.id} className={`message ${m.kind}`}><div className="message-header">{m.participantId?<span className="avatar" style={{width:22,height:22,fontSize:8}}>{(m.displayName||'?').slice(0,2).toUpperCase()}</span>:<BookOpen size={17} className="accent"/>}{m.participantId?m.displayName||'Study partner':m.kind==='simplified'?'Simplified re-explanation':'Study companion'}{m.status==='streaming'&&<small>Thinking with you…</small>}</div><p className="message-body">{m.content||'Finding the right words…'}</p>{m.citations?.length? <><div className="cites">{m.citations.map((c,i)=><button className="cite" key={c.id} onClick={()=>{setActive([c.id]);const d=data?.documents.find(d=>d.chunks.some(x=>x.id===c.id));if(d)setSelected(d.id);}}>[{i+1}] {c.sectionLabel||'Passage'} · {Math.round(c.similarity*100)}%</button>)}</div>{m.citations[0].similarity<.5&&<p className="notice" style={{fontSize:11,marginTop:10}}>Low confidence — consider rephrasing. The notes may not cover this question.</p>}</>:null}{!m.participantId&&m.status==='complete'&&<button className="quiet lost" disabled={clicked.current.has(m.id)||ending} onClick={()=>emit('lost-click',{messageId:m.id},r=>{if(r.ok){clicked.current.add(m.id);setMessages(old=>[...old]);}})}><Hand size={14}/>{clicked.current.has(m.id)?'You raised your hand':"I’m lost"}{m.lostCount?` · ${m.lostCount} ${m.lostCount===1?'person is':'people are'} lost`:''}</button>}</article>):<div className="empty"><MessageCircle size={36}/><h3>What’s on your mind?</h3><p style={{fontSize:12,lineHeight:1.8}}>Try “Explain the main idea” or ask about a specific passage.</p></div>}</div><div className="composer"><form onSubmit={e=>{e.preventDefault();const form=e.currentTarget;const q=String(new FormData(form).get('question'));if(q.trim().length<3)return;setBusy(true);emit('ask-question',{question:q},()=>setBusy(false));form.reset();}}><textarea aria-label="Ask a question" name="question" placeholder="Let’s work through something…" maxLength={2000} required/><button aria-label="Send question" disabled={!connected||busy||streaming||ending||!data?.documents.some(d=>d.sourceType==='COURSE_MATERIAL')}><Send size={17}/></button></form><small>Grounded in your notes. Always make room for a second look.</small></div></>:<div className="quiz-box">{question?<><div className="row between"><span className="eyebrow">{reveal?'The reveal':'Trust your judgment'}</span><span className="clock"><Clock size={16} style={{display:'inline',marginRight:7}}/>{reveal?'—':`${remaining}s`}</span></div>{question.styledAfterPastExam&&<span className="tag">Past-exam style · New question</span>}<h2>{question.questionText}</h2><p className="muted" style={{fontSize:11,lineHeight:1.7}}>Spread 100% across the answers. Your honest confidence is your best strategy.</p>{question.options.map((option,i)=><div className={`quiz-option ${reveal?.correctOptionIndex===i?'correct':''}`} key={i}><label><span className="accent">{'ABCD'[i]}.</span>{option}<input aria-label={`Option ${'ABCD'[i]} probability`} type="number" min={0} max={100} step={1} value={distribution[i]} disabled={submitted||!!reveal||remaining===0||!eligible} onChange={e=>setDistribution(p=>p.map((v,j)=>i===j?Math.max(0,Math.min(100,Number(e.target.value))):v))}/>%</label><input aria-label={`Option ${'ABCD'[i]} slider`} type="range" min={0} max={100} value={distribution[i]} disabled={submitted||!!reveal||remaining===0||!eligible} onChange={e=>setDistribution(p=>p.map((v,j)=>i===j?Number(e.target.value):v))}/></div>)}{!reveal&&<><div className="row between" style={{margin:'18px 0'}}><small className={sum===100?'':'accent'}>Total: {sum}% / 100%</small><small>{submitted?'Locked in. Waiting for everyone.':!eligible?'Join the next round.':'Private until the reveal.'}</small></div><button style={{width:'100%'}} disabled={sum!==100||submitted||remaining===0||!eligible||!connected} onClick={()=>emit('quiz-submit',{questionId:question.id,distribution},r=>{if(r.ok)setSubmitted(true);})}><Check size={16}/>{submitted?'Probabilities submitted':'Lock in my confidence'}</button></>}{reveal&&<section className="reveal"><h3 style={{marginTop:25}}>The moment of truth.</h3><p style={{fontSize:12,lineHeight:1.8,marginTop:12}}>{reveal.explanation}</p>{reveal.results.map(r=><div className="score-row" key={r.participantId}><div className="row between"><strong>{r.displayName}</strong><span className="accent">{r.zeroProbability?'−∞':r.score?.toFixed(3)}</span></div><div className="distribution">{r.distribution.map((p,i)=><span key={i} style={{width:`${p}%`,opacity:i===reveal.correctOptionIndex?1:.2}}/>)}</div><small>{r.distribution.map((p,i)=>`${'ABCD'[i]} ${p}%`).join(' · ')}</small></div>)}{isHost&&<button style={{marginTop:20,width:'100%'}} disabled={busy||ending} onClick={()=>{setBusy(true);emit('quiz-question-start',{},()=>setBusy(false));}}>{busy?'Writing a new question…':'One more question'}<ArrowUpRight size={15}/></button>}</section>}</>:<div className="empty" style={{padding:'30px 5px'}}><ChartNoAxesCombined size={44}/><h2>A little less guessing.</h2><p style={{fontSize:13,lineHeight:1.8}}>How sure are you, really? Assign a probability to each answer. Everyone has 20 seconds, and the truth comes out together.</p><p style={{fontSize:11,lineHeight:1.8}}>Higher log scores win. A confident mistake costs more than honest uncertainty. Zero on the correct answer scores −∞.</p>{isHost?<button disabled={busy||!connected||ending||!data?.documents.some(d=>d.sourceType==='COURSE_MATERIAL')} onClick={()=>{setBusy(true);emit('quiz-question-start',{},()=>setBusy(false));}}>{busy?'Writing your first question…':'Start a round'}<ArrowUpRight size={15}/></button>:<small>Your host will start the next round.</small>}</div>}{leaders.length>0&&<section style={{marginTop:30}}><span className="eyebrow">Around the table / Leaderboard</span>{leaders.map((l,i)=><div className="score-row row between" key={l.participantId}><span>{i+1}. {l.displayName}</span><span>{l.zeroProbability?'−∞':l.score.toFixed(3)} <small>/{l.rounds} rounds</small></span></div>)}</section>}</div>}</section></main>
-  {modal&&<div className="modal-backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label={modal==='upload'?'Add study material':modal==='focus'?'Set study focus':'Wrap up session'}><div className="row between"><h2>{modal==='upload'?'Bring something to the table.':modal==='focus'?'Where should we focus?':'A good place to pause.'}</h2><button className="quiet" aria-label="Close dialog" onClick={()=>setModal(null)} disabled={busy}><X size={20}/></button></div>{modal==='upload'?<form onSubmit={upload}><label>Material type<select name="sourceType"><option value="COURSE_MATERIAL">Course material</option><option value="PAST_EXAM">Past exam — style reference only</option></select></label><label>Upload a PDF (up to 4 MB)<input type="file" name="file" accept="application/pdf"/></label><span className="eyebrow">Or paste your notes</span><label>Document title<input name="filename" placeholder="Chapter 3 — Cell biology"/></label><label>Text<textarea name="text" rows={6} maxLength={180000} placeholder="Paste the chapter or passage here…"/></label><small>Scanned PDFs need selectable text. Your documents are visible to room participants.</small>{error&&<p className="error">{error}</p>}<button disabled={busy}>{busy?'Reading and indexing your notes…':'Add to the table'}<Plus size={16}/></button></form>:modal==='focus'?<form onSubmit={focus}><label>Study focus<textarea name="studyFocus" defaultValue={data?.room.studyFocusRaw} maxLength={2000} rows={5}/></label><small>Try “Focus on chapter 3, skip chapter 5, and use everyday examples.”</small><button disabled={busy}>{busy?'Setting the direction…':'Save our focus'}</button></form>:<div className="stack"><p style={{lineHeight:1.8}}>We’ll gather what clicked, the passages worth another look, and a few next steps. Everyone will move to the shared rundown.</p><button disabled={busy||streaming||ending||!!question&&!reveal} onClick={()=>{setModal(null);emit('end-session');}}>End session & create rundown<ArrowUpRight size={16}/></button><small>Finish any active answer or quiz round before wrapping up.</small></div>}</section></div>}</>;
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
+import {
+  BookOpen,
+  FileText,
+  Plus,
+  Link as LinkIcon,
+  ArrowUpRight,
+  Send,
+  MessageCircle,
+  ChartNoAxesCombined,
+  Hand,
+  Users,
+  X,
+  Check,
+  Clock,
+  Leaf,
+} from "lucide-react";
+import Header from "./Header";
+type Chunk = {
+  id: string;
+  content: string;
+  sectionLabel: string | null;
+  position: number;
+};
+type Doc = {
+  id: string;
+  filename: string;
+  sourceType: string;
+  chunks: Chunk[];
+};
+type Citation = {
+  id: string;
+  sectionLabel: string | null;
+  filename: string;
+  similarity: number;
+};
+type Message = {
+  id: string;
+  content: string;
+  participantId: string | null;
+  displayName?: string;
+  kind: string;
+  status: string;
+  citations?: Citation[];
+  lostCount?: number;
+};
+type Question = {
+  id: string;
+  questionText: string;
+  options: string[];
+  endsAt: number;
+  serverNow: number;
+  styledAfterPastExam: boolean;
+};
+type Result = {
+  participantId: string;
+  displayName: string;
+  distribution: number[];
+  score: number | null;
+  zeroProbability: boolean;
+};
+type Leader = {
+  participantId: string;
+  displayName: string;
+  score: number;
+  zeroProbability: boolean;
+  rounds: number;
+};
+type Reveal = {
+  questionId: string;
+  correctOptionIndex: number;
+  explanation: string;
+  results: Result[];
+  leaderboard: Leader[];
+};
+type RoomData = {
+  room: { id: string; name: string; status: string; studyFocusRaw: string };
+  documents: Doc[];
+  messages: Message[];
+  isHost: boolean;
+};
+export default function RoomClient({ id }: { id: string }) {
+  const [data, setData] = useState<RoomData | null>(null),
+    [joined, setJoined] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [connected, setConnected] = useState(false),
+    [isHost, setHost] = useState(false),
+    [messages, setMessages] = useState<Message[]>([]),
+    [people, setPeople] = useState<{ id: string; displayName: string }[]>([]),
+    [heat, setHeat] = useState<Record<string, number>>({}),
+    [active, setActive] = useState<string[]>([]),
+    [selected, setSelected] = useState(""),
+    [mode, setMode] = useState<"qa" | "quiz">("qa"),
+    [modal, setModal] = useState<"upload" | "focus" | "end" | null>(null),
+    [busy, setBusy] = useState(false),
+    [question, setQuestion] = useState<Question | null>(null),
+    [reveal, setReveal] = useState<Reveal | null>(null),
+    [distribution, setDistribution] = useState([25, 25, 25, 25]),
+    [submitted, setSubmitted] = useState(false),
+    [eligible, setEligible] = useState(true),
+    [leaders, setLeaders] = useState<Leader[]>([]),
+    [remaining, setRemaining] = useState(20),
+    [ending, setEnding] = useState(false);
+  const socket = useRef<Socket | null>(null),
+    scroll = useRef<HTMLDivElement>(null),
+    offset = useRef(0),
+    participant = useRef(""),
+    clicked = useRef(new Set<string>());
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/rooms/${id}`);
+    if (!r.ok) return;
+    const body = await r.json();
+    setData(body);
+    setMessages(body.messages);
+    setSelected((s) => s || body.documents[0]?.id || "");
+    return body;
+  }, [id]);
+  useEffect(
+    () => () => {
+      socket.current?.disconnect();
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!joined) return;
+    const timer = setInterval(() => {
+      if (!messages.some((m) => m.status === "streaming")) void load();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [joined, load, messages]);
+  useEffect(() => {
+    scroll.current?.scrollTo({
+      top: scroll.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages]);
+  useEffect(() => {
+    if (active[0])
+      document
+        .getElementById(`chunk-${active[0]}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [active, selected]);
+  useEffect(() => {
+    if (!question) return;
+    const tick = () =>
+      setRemaining(
+        Math.max(
+          0,
+          Math.ceil((question.endsAt - (Date.now() + offset.current)) / 1000),
+        ),
+      );
+    tick();
+    const timer = setInterval(tick, 200);
+    return () => clearInterval(timer);
+  }, [question]);
+  async function join(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    const displayName = String(
+      new FormData(e.currentTarget).get("displayName"),
+    );
+    try {
+      const r = await fetch(`/api/rooms/${id}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
+      });
+      const body = await r.json();
+      if (r.status === 401) {
+        window.location.href = `/login?next=/rooms/${id}`;
+        return;
+      }
+      if (!r.ok) throw new Error(body.error);
+      participant.current = body.participantId;
+      setHost(body.isHost);
+      const initial = await load();
+      if (initial?.latestRound) {
+        const last = initial.latestRound;
+        setQuestion({id:last.id,questionText:last.questionText,options:last.options,endsAt:new Date(last.endsAt).getTime(),serverNow:Date.now(),styledAfterPastExam:last.styledAfterPastExam});
+        setReveal({questionId:last.id,correctOptionIndex:last.correctOptionIndex,explanation:last.explanation,results:last.results.map((r:any)=>({participantId:r.participantId,displayName:r.participant.displayName,distribution:r.submittedDistribution,score:r.zeroProbability?null:r.score,zeroProbability:r.zeroProbability})),leaderboard:[]});
+      }
+      setJoined(true);
+      const s = io(body.socketUrl, {
+        auth: { token: body.token },
+        transports: ["websocket", "polling"],
+        reconnection: true,
+      });
+      socket.current = s;
+      s.on("connect", () => {
+        setConnected(true);
+        setError("");
+        s.emit("join-room", {}, () => {});
+        void load();
+      });
+      s.on("disconnect", () => setConnected(false));
+      s.on("connect_error", () => {
+        setConnected(false);
+        setError(
+          "Connecting to the study room… The free server may need a moment to wake up.",
+        );
+      });
+      s.on("room-error", (message: string) => {
+        setError(message);
+        setBusy(false);
+        setEnding(false);
+      });
+      s.on("presence", setPeople);
+      s.on("heatmap-update", setHeat);
+      s.on("leaderboard", setLeaders);
+      s.on("chat-message", (message: Message) =>
+        setMessages((old) =>
+          old.some((m) => m.id === message.id) ? old : [...old, message],
+        ),
+      );
+      s.on("answer-start", (message: Message) =>
+        setMessages((old) =>
+          old.some((m) => m.id === message.id) ? old : [...old, message],
+        ),
+      );
+      s.on("answer-chunk", ({ messageId, token }) =>
+        setMessages((old) =>
+          old.map((m) =>
+            m.id === messageId ? { ...m, content: m.content + token } : m,
+          ),
+        ),
+      );
+      s.on("answer-complete", ({ messageId, content, failed }) => {
+        setMessages((old) =>
+          old.map((m) =>
+            m.id === messageId
+              ? { ...m, content, status: failed ? "failed" : "complete" }
+              : m,
+          ),
+        );
+        setBusy(false);
+      });
+      s.on("chunk-highlight", ({ chunkIds }) => {
+        setActive(chunkIds);
+        setData((current) => {
+          const doc = current?.documents.find((d) =>
+            d.chunks.some((c) => chunkIds.includes(c.id)),
+          );
+          if (doc) setSelected(doc.id);
+          return current;
+        });
+      });
+      s.on("lost-count", ({ messageId, count }) =>
+        setMessages((old) =>
+          old.map((m) => (m.id === messageId ? { ...m, lostCount: count } : m)),
+        ),
+      );
+      s.on("quiz-question-start", (q: Question) => {
+        offset.current = q.serverNow - Date.now();
+        setQuestion(q);
+        setReveal(null);
+        setDistribution([25, 25, 25, 25]);
+        setSubmitted(false);
+        setEligible(true);
+        setMode("quiz");
+        setBusy(false);
+      });
+      s.on("quiz-submission-status", ({ submitted, eligible }) => {
+        setSubmitted(submitted);
+        setEligible(eligible);
+      });
+      s.on("quiz-round-reveal", (value: Reveal) => {
+        setReveal(value);
+        setLeaders(value.leaderboard);
+        setBusy(false);
+      });
+      s.on("session-ending", () => setEnding(true));
+      s.on("session-ended", () => {
+        window.location.href = `/rooms/${id}/summary`;
+      });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function emit(
+    event: string,
+    payload: object = {},
+    callback?: (result: any) => void,
+  ) {
+    setError("");
+    if (!socket.current?.connected) {
+      setError("Wait for the room to reconnect.");
+      return;
+    }
+    socket.current.emit(event, payload, (r: any) => {
+      if (!r.ok) setError(r.error);
+      callback?.(r);
+    });
+  }
+  async function upload(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch(`/api/rooms/${id}/documents`, {
+        method: "POST",
+        body: new FormData(e.currentTarget),
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error);
+      await load();
+      setSelected(body.id);
+      setModal(null);
+      setNotice(`${body.filename} is ready — ${body.chunks} passages added.`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function focus(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/rooms/${id}/study-focus`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studyFocus: new FormData(e.currentTarget).get("studyFocus"),
+        }),
+      });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error);
+      await load();
+      setModal(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const doc = data?.documents.find((d) => d.id === selected),
+    streaming = messages.some((m) => m.status === "streaming"),
+    sum = distribution.reduce((a, b) => a + b, 0),
+    maxHeat = Math.max(1, ...Object.values(heat));
+  if (!joined)
+    return (
+      <>
+        <Header />
+        <main className="form-wrap">
+          <BookOpen className="accent" size={38} />
+          <h1 style={{ marginTop: 20 }}>There’s a seat for you.</h1>
+          <p className="muted">
+            Enter your name to join this study room. You’ll need to sign in if
+            you haven’t already.
+          </p>
+          <form onSubmit={join}>
+            <label>
+              Your name at the table
+              <input
+                name="displayName"
+                maxLength={50}
+                required
+                placeholder="Your first name"
+              />
+            </label>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button disabled={busy}>
+              {busy ? "Finding your seat…" : "Join the table"}
+              <ArrowUpRight size={16} />
+            </button>
+          </form>
+        </main>
+      </>
+    );
+  return (
+    <>
+      <Header />
+      <div className="workspace-head">
+        <div>
+          <div className="eyebrow">
+            Your shared study table <span className="accent">/</span>{" "}
+            {connected ? "Connected" : "Reconnecting"}
+          </div>
+          <h1>{data?.room.name || "Study room"}</h1>
+        </div>
+        <div className="actions">
+          <span className="tag">
+            <span className="dot" />
+            {people.length} at the table
+          </span>
+          <button
+            className="secondary"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(window.location.href);
+                setNotice("Room link copied. Share it with your study group.");
+              } catch {
+                setNotice(window.location.href);
+              }
+            }}
+          >
+            <LinkIcon size={14} />
+            Invite a friend
+          </button>
+          {isHost && (
+            <button className="quiet" onClick={() => setModal("end")}>
+              Wrap up
+              <ArrowUpRight size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      {error && (
+        <div role="alert" className="error">
+          {error}
+          <button
+            className="quiet"
+            onClick={() => setError("")}
+            aria-label="Dismiss error"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {notice && (
+        <div role="status" className="notice row between">
+          {notice}
+          <button
+            className="quiet"
+            onClick={() => setNotice("")}
+            aria-label="Dismiss notification"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      {ending && (
+        <div className="notice">
+          Gathering the group’s lightbulb moments and next steps… Your rundown
+          will open automatically.
+        </div>
+      )}
+      <main className="workspace">
+        <aside className="sidebar">
+          <section>
+            <h2>On the table</h2>
+            {data?.documents.map((d) => (
+              <button
+                key={d.id}
+                className={`document-link ${d.id === selected ? "active" : ""}`}
+                onClick={() => setSelected(d.id)}
+              >
+                <FileText size={17} />
+                <span>
+                  {d.filename}
+                  <small>
+                    {d.sourceType === "PAST_EXAM"
+                      ? "Past exam · style reference"
+                      : `${d.chunks.length} passages`}
+                  </small>
+                </span>
+              </button>
+            ))}
+            {!data?.documents.length && (
+              <p className="muted" style={{ fontSize: 12, lineHeight: 1.7 }}>
+                No notes yet. Bring something to work through.
+              </p>
+            )}
+            {isHost && (
+              <button
+                className="quiet"
+                style={{ fontSize: 11, marginTop: 12 }}
+                onClick={() => setModal("upload")}
+              >
+                <Plus size={14} />
+                Add study material
+              </button>
+            )}
+          </section>
+          <section>
+            <div className="row between">
+              <h2>Our focus</h2>
+              {isHost && (
+                <button
+                  className="quiet"
+                  aria-label="Edit study focus"
+                  onClick={() => setModal("focus")}
+                >
+                  <ArrowUpRight size={13} />
+                </button>
+              )}
+            </div>
+            <p className="focus">
+              {data?.room.studyFocusRaw ||
+                "Follow the questions. See where they take us."}
+            </p>
+          </section>
+          <section className="people-section">
+            <h2>At the table</h2>
+            <div className="participants">
+              {people.map((p) => (
+                <div className="row" key={p.id}>
+                  <span className="avatar">
+                    {p.displayName.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span>
+                    {p.displayName}
+                    {p.id === participant.current ? " (you)" : ""}
+                  </span>
+                  <span className="dot" style={{ marginLeft: "auto" }} />
+                </div>
+              ))}
+            </div>
+          </section>
+          <section style={{ marginTop: "auto" }}>
+            <Leaf size={22} className="accent" />
+            <p
+              style={{
+                fontFamily: "var(--serif)",
+                fontStyle: "italic",
+                fontSize: 12,
+                lineHeight: 1.7,
+                marginTop: 10,
+              }}
+            >
+              Understanding takes a little time.
+              <br />
+              You’re in good company.
+            </p>
+          </section>
+        </aside>
+        <section className="work-area">
+          <div className="viewer-toolbar">
+            <span>{doc ? "READING TOGETHER" : "A FRESH PAGE"}</span>
+            <div className="heat-scale">
+              <span>Less discussed</span>
+              {[0.1, 0.25, 0.5, 0.8].map((n) => (
+                <i key={n} style={{ opacity: n }} />
+              ))}
+              <span>More</span>
+            </div>
+          </div>
+          <article className="paper">
+            {doc ? (
+              <>
+                <div className="eyebrow">
+                  {doc.sourceType === "PAST_EXAM"
+                    ? "Past paper / Style reference"
+                    : "Course material / Shared notes"}
+                </div>
+                <h2>{doc.filename.replace(/\.pdf$/i, "")}</h2>
+                {doc.chunks.map((c, i) => (
+                  <section
+                    id={`chunk-${c.id}`}
+                    key={c.id}
+                    className={`passage ${active.includes(c.id) ? "selected" : ""}`}
+                    style={{
+                      backgroundColor: `rgba(var(--accent-rgb),${((heat[c.id] || 0) / maxHeat) * 0.22})`,
+                    }}
+                  >
+                    <div className="citation-label">
+                      PASSAGE {String(i + 1).padStart(2, "0")}
+                      {active.includes(c.id) ? " / IN THE CONVERSATION" : ""}
+                    </div>
+                    {c.sectionLabel && <h3>{c.sectionLabel}</h3>}
+                    <p>{c.content}</p>
+                  </section>
+                ))}
+                <div className="paper-footer">
+                  <span>STUDY ROOM / YOUR SHARED COPY</span>
+                  <span>{doc.chunks.length} passages</span>
+                </div>
+              </>
+            ) : (
+              <div className="empty" style={{ paddingTop: 80 }}>
+                <BookOpen size={60} />
+                <h2>Start with a page.</h2>
+                <p style={{ lineHeight: 1.8, maxWidth: 260 }}>
+                  Upload your course notes or paste a passage. Your shared
+                  reading space will take shape here.
+                </p>
+                {isHost && (
+                  <button
+                    className="secondary"
+                    onClick={() => setModal("upload")}
+                  >
+                    <Plus size={15} />
+                    Bring your notes
+                  </button>
+                )}
+              </div>
+            )}
+          </article>
+        </section>
+        <section className="chat-panel">
+          <div className="tabs">
+            <button
+              className={mode === "qa" ? "active" : ""}
+              onClick={() => setMode("qa")}
+            >
+              <MessageCircle size={15} />
+              Study Q&A
+            </button>
+            <button
+              className={mode === "quiz" ? "active" : ""}
+              onClick={() => setMode("quiz")}
+            >
+              <ChartNoAxesCombined size={15} />
+              Confidence quiz
+            </button>
+          </div>
+          {mode === "qa" ? (
+            <>
+              <div className="chat-scroll" ref={scroll}>
+                <p className="chat-intro">
+                  One conversation, shared by everyone.
+                  <br />
+                  Ask a question. We’ll find the passage together.
+                </p>
+                {messages.length ? (
+                  messages.map((m) => (
+                    <article key={m.id} className={`message ${m.kind}`}>
+                      <div className="message-header">
+                        {m.participantId ? (
+                          <span
+                            className="avatar"
+                            style={{ width: 22, height: 22, fontSize: 8 }}
+                          >
+                            {(m.displayName || "?").slice(0, 2).toUpperCase()}
+                          </span>
+                        ) : (
+                          <BookOpen size={17} className="accent" />
+                        )}
+                        {m.participantId
+                          ? m.displayName || "Study partner"
+                          : m.kind === "simplified"
+                            ? "Simplified re-explanation"
+                            : "Study companion"}
+                        {m.status === "streaming" && (
+                          <small>Thinking with you…</small>
+                        )}
+                      </div>
+                      <p className="message-body">
+                        {m.content || "Finding the right words…"}
+                      </p>
+                      {m.citations?.length ? (
+                        <>
+                          <div className="cites">
+                            {m.citations.map((c, i) => (
+                              <button
+                                className="cite"
+                                key={c.id}
+                                onClick={() => {
+                                  setActive([c.id]);
+                                  const d = data?.documents.find((d) =>
+                                    d.chunks.some((x) => x.id === c.id),
+                                  );
+                                  if (d) setSelected(d.id);
+                                }}
+                              >
+                                [{i + 1}] {c.sectionLabel || "Passage"} ·{" "}
+                                {Math.round(c.similarity * 100)}%
+                              </button>
+                            ))}
+                          </div>
+                          {m.citations[0].similarity < 0.5 && (
+                            <p
+                              className="notice"
+                              style={{ fontSize: 11, marginTop: 10 }}
+                            >
+                              Low confidence — consider rephrasing. The notes
+                              may not cover this question.
+                            </p>
+                          )}
+                        </>
+                      ) : null}
+                      {!m.participantId && ["complete", "streaming"].includes(m.status) && (
+                        <button
+                          className="quiet lost"
+                          disabled={clicked.current.has(m.id) || ending}
+                          onClick={() =>
+                            emit("lost-click", { messageId: m.id }, (r) => {
+                              if (r.ok) {
+                                clicked.current.add(m.id);
+                                setMessages((old) => [...old]);
+                              }
+                            })
+                          }
+                        >
+                          <Hand size={14} />
+                          {clicked.current.has(m.id)
+                            ? "You raised your hand"
+                            : "I’m lost"}
+                          {m.lostCount
+                            ? ` · ${m.lostCount} ${m.lostCount === 1 ? "person is" : "people are"} lost`
+                            : ""}
+                        </button>
+                      )}
+                    </article>
+                  ))
+                ) : (
+                  <div className="empty">
+                    <MessageCircle size={36} />
+                    <h3>What’s on your mind?</h3>
+                    <p style={{ fontSize: 12, lineHeight: 1.8 }}>
+                      Try “Explain the main idea” or ask about a specific
+                      passage.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="composer">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const q = String(new FormData(form).get("question"));
+                    if (q.trim().length < 3) return;
+                    setBusy(true);
+                    emit("ask-question", { question: q }, () => setBusy(false));
+                    form.reset();
+                  }}
+                >
+                  <textarea
+                    aria-label="Ask a question"
+                    name="question"
+                    placeholder="Let’s work through something…"
+                    maxLength={2000}
+                    required
+                  />
+                  <button
+                    aria-label="Send question"
+                    disabled={
+                      !connected ||
+                      busy ||
+                      streaming ||
+                      ending ||
+                      !data?.documents.some(
+                        (d) => d.sourceType === "COURSE_MATERIAL",
+                      )
+                    }
+                  >
+                    <Send size={17} />
+                  </button>
+                </form>
+                <small>
+                  Grounded in your notes. Always make room for a second look.
+                </small>
+              </div>
+            </>
+          ) : (
+            <div className="quiz-box">
+              {question ? (
+                <>
+                  <div className="row between">
+                    <span className="eyebrow">
+                      {reveal ? "The reveal" : "Trust your judgment"}
+                    </span>
+                    <span className="clock">
+                      <Clock
+                        size={16}
+                        style={{ display: "inline", marginRight: 7 }}
+                      />
+                      {reveal ? "—" : `${remaining}s`}
+                    </span>
+                  </div>
+                  {question.styledAfterPastExam && (
+                    <span className="tag">Past-exam style · New question</span>
+                  )}
+                  <h2>{question.questionText}</h2>
+                  <p
+                    className="muted"
+                    style={{ fontSize: 11, lineHeight: 1.7 }}
+                  >
+                    Spread 100% across the answers. Your honest confidence is
+                    your best strategy.
+                  </p>
+                  {question.options.map((option, i) => (
+                    <div
+                      className={`quiz-option ${reveal?.correctOptionIndex === i ? "correct" : ""}`}
+                      key={i}
+                    >
+                      <label>
+                        <span className="accent">{"ABCD"[i]}.</span>
+                        {option}
+                        <input
+                          aria-label={`Option ${"ABCD"[i]} probability`}
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={1}
+                          value={distribution[i]}
+                          disabled={
+                            submitted ||
+                            !!reveal ||
+                            remaining === 0 ||
+                            !eligible
+                          }
+                          onChange={(e) =>
+                            setDistribution((p) =>
+                              p.map((v, j) =>
+                                i === j
+                                  ? Math.max(
+                                      0,
+                                      Math.min(100, Number(e.target.value)),
+                                    )
+                                  : v,
+                              ),
+                            )
+                          }
+                        />
+                        %
+                      </label>
+                      <input
+                        aria-label={`Option ${"ABCD"[i]} slider`}
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={distribution[i]}
+                        disabled={
+                          submitted || !!reveal || remaining === 0 || !eligible
+                        }
+                        onChange={(e) =>
+                          setDistribution((p) =>
+                            p.map((v, j) =>
+                              i === j ? Number(e.target.value) : v,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                  ))}
+                  {!reveal && (
+                    <>
+                      <div className="row between" style={{ margin: "18px 0" }}>
+                        <small className={sum === 100 ? "" : "accent"}>
+                          Total: {sum}% / 100%
+                        </small>
+                        <small>
+                          {submitted
+                            ? "Locked in. Waiting for everyone."
+                            : !eligible
+                              ? "Join the next round."
+                              : "Private until the reveal."}
+                        </small>
+                      </div>
+                      <button
+                        style={{ width: "100%" }}
+                        disabled={
+                          sum !== 100 ||
+                          submitted ||
+                          remaining === 0 ||
+                          !eligible ||
+                          !connected
+                        }
+                        onClick={() =>
+                          emit(
+                            "quiz-submit",
+                            { questionId: question.id, distribution },
+                            (r) => {
+                              if (r.ok) setSubmitted(true);
+                            },
+                          )
+                        }
+                      >
+                        <Check size={16} />
+                        {submitted
+                          ? "Probabilities submitted"
+                          : "Lock in my confidence"}
+                      </button>
+                    </>
+                  )}
+                  {reveal && (
+                    <section className="reveal">
+                      <h3 style={{ marginTop: 25 }}>The moment of truth.</h3>
+                      <p
+                        style={{ fontSize: 12, lineHeight: 1.8, marginTop: 12 }}
+                      >
+                        {reveal.explanation}
+                      </p>
+                      {reveal.results.map((r) => (
+                        <div className="score-row" key={r.participantId}>
+                          <div className="row between">
+                            <strong>{r.displayName}</strong>
+                            <span className="accent">
+                              {r.zeroProbability ? "−∞" : r.score?.toFixed(3)}
+                            </span>
+                          </div>
+                          <div className="distribution">
+                            {r.distribution.map((p, i) => (
+                              <span
+                                key={i}
+                                style={{
+                                  width: `${p}%`,
+                                  opacity:
+                                    i === reveal.correctOptionIndex ? 1 : 0.2,
+                                }}
+                              />
+                            ))}
+                          </div>
+                          <small>
+                            {r.distribution
+                              .map((p, i) => `${"ABCD"[i]} ${p}%`)
+                              .join(" · ")}
+                          </small>
+                        </div>
+                      ))}
+                      {isHost && (
+                        <button
+                          style={{ marginTop: 20, width: "100%" }}
+                          disabled={busy || ending}
+                          onClick={() => {
+                            setBusy(true);
+                            emit("quiz-question-start", {}, () =>
+                              setBusy(false),
+                            );
+                          }}
+                        >
+                          {busy
+                            ? "Writing a new question…"
+                            : "One more question"}
+                          <ArrowUpRight size={15} />
+                        </button>
+                      )}
+                    </section>
+                  )}
+                </>
+              ) : (
+                <div className="empty" style={{ padding: "30px 5px" }}>
+                  <ChartNoAxesCombined size={44} />
+                  <h2>A little less guessing.</h2>
+                  <p style={{ fontSize: 13, lineHeight: 1.8 }}>
+                    How sure are you, really? Assign a probability to each
+                    answer. Everyone has 20 seconds, and the truth comes out
+                    together.
+                  </p>
+                  <p style={{ fontSize: 11, lineHeight: 1.8 }}>
+                    Higher log scores win. A confident mistake costs more than
+                    honest uncertainty. Zero on the correct answer scores −∞.
+                  </p>
+                  {isHost ? (
+                    <button
+                      disabled={
+                        busy ||
+                        !connected ||
+                        ending ||
+                        !data?.documents.some(
+                          (d) => d.sourceType === "COURSE_MATERIAL",
+                        )
+                      }
+                      onClick={() => {
+                        setBusy(true);
+                        emit("quiz-question-start", {}, () => setBusy(false));
+                      }}
+                    >
+                      {busy ? "Writing your first question…" : "Start a round"}
+                      <ArrowUpRight size={15} />
+                    </button>
+                  ) : (
+                    <small>Your host will start the next round.</small>
+                  )}
+                </div>
+              )}
+              {leaders.length > 0 && (
+                <section style={{ marginTop: 30 }}>
+                  <span className="eyebrow">
+                    Around the table / Leaderboard
+                  </span>
+                  {leaders.map((l, i) => (
+                    <div
+                      className="score-row row between"
+                      key={l.participantId}
+                    >
+                      <span>
+                        {i + 1}. {l.displayName}
+                      </span>
+                      <span>
+                        {l.zeroProbability ? "−∞" : l.score.toFixed(3)}{" "}
+                        <small>/{l.rounds} rounds</small>
+                      </span>
+                    </div>
+                  ))}
+                </section>
+              )}
+            </div>
+          )}
+        </section>
+      </main>
+      {modal && (
+        <div className="modal-backdrop">
+          <section
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              modal === "upload"
+                ? "Add study material"
+                : modal === "focus"
+                  ? "Set study focus"
+                  : "Wrap up session"
+            }
+          >
+            <div className="row between">
+              <h2>
+                {modal === "upload"
+                  ? "Bring something to the table."
+                  : modal === "focus"
+                    ? "Where should we focus?"
+                    : "A good place to pause."}
+              </h2>
+              <button
+                className="quiet"
+                aria-label="Close dialog"
+                onClick={() => setModal(null)}
+                disabled={busy}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            {modal === "upload" ? (
+              <form onSubmit={upload}>
+                <label>
+                  Material type
+                  <select name="sourceType">
+                    <option value="COURSE_MATERIAL">Course material</option>
+                    <option value="PAST_EXAM">
+                      Past exam — style reference only
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  Upload a PDF (up to 4 MB)
+                  <input type="file" name="file" accept="application/pdf" />
+                </label>
+                <span className="eyebrow">Or paste your notes</span>
+                <label>
+                  Document title
+                  <input
+                    name="filename"
+                    placeholder="Chapter 3 — Cell biology"
+                  />
+                </label>
+                <label>
+                  Text
+                  <textarea
+                    name="text"
+                    rows={6}
+                    maxLength={180000}
+                    placeholder="Paste the chapter or passage here…"
+                  />
+                </label>
+                <small>
+                  Scanned PDFs need selectable text. Your documents are visible
+                  to room participants.
+                </small>
+                {error && <p className="error">{error}</p>}
+                <button disabled={busy}>
+                  {busy
+                    ? "Reading and indexing your notes…"
+                    : "Add to the table"}
+                  <Plus size={16} />
+                </button>
+              </form>
+            ) : modal === "focus" ? (
+              <form onSubmit={focus}>
+                <label>
+                  Study focus
+                  <textarea
+                    name="studyFocus"
+                    defaultValue={data?.room.studyFocusRaw}
+                    maxLength={2000}
+                    rows={5}
+                  />
+                </label>
+                <small>
+                  Try “Focus on chapter 3, skip chapter 5, and use everyday
+                  examples.”
+                </small>
+                <button disabled={busy}>
+                  {busy ? "Setting the direction…" : "Save our focus"}
+                </button>
+              </form>
+            ) : (
+              <div className="stack">
+                <p style={{ lineHeight: 1.8 }}>
+                  We’ll gather what clicked, the passages worth another look,
+                  and a few next steps. Everyone will move to the shared
+                  rundown.
+                </p>
+                <button
+                  disabled={
+                    busy || streaming || ending || (!!question && !reveal)
+                  }
+                  onClick={() => {
+                    setModal(null);
+                    emit("end-session");
+                  }}
+                >
+                  End session & create rundown
+                  <ArrowUpRight size={16} />
+                </button>
+                <small>
+                  Finish any active answer or quiz round before wrapping up.
+                </small>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </>
+  );
 }

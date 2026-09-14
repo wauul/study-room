@@ -1,9 +1,20 @@
-import { Prisma, Room, SourceType } from '@prisma/client';
-import { db } from '../db';
-import { embed } from './embeddings';
-export type RetrievedChunk={id:string;content:string;sectionLabel:string|null;similarity:number;filename:string};
-export async function retrieve(room:Room,query:string,sourceType:SourceType='COURSE_MATERIAL',limit=5):Promise<RetrievedChunk[]> {
-  const vector=JSON.stringify(await embed(query));
+import { Prisma, Room, SourceType } from "@prisma/client";
+import { db } from "../db";
+import { embed } from "./embeddings";
+export type RetrievedChunk = {
+  id: string;
+  content: string;
+  sectionLabel: string | null;
+  similarity: number;
+  filename: string;
+};
+export async function retrieve(
+  room: Room,
+  query: string,
+  sourceType: SourceType = "COURSE_MATERIAL",
+  limit = 5,
+): Promise<RetrievedChunk[]> {
+  const vector = JSON.stringify(await embed(query));
   // Exclusions are applied BEFORE ranking; boosts change rank, never the reported
   // cosine similarity. Parameters are bound by Prisma, including all user labels.
   return db.$queryRaw<RetrievedChunk[]>(Prisma.sql`
