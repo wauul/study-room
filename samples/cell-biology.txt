@@ -1,0 +1,13 @@
+# Chapter 1: Cell membranes
+Cell membranes are selectively permeable barriers made of a phospholipid bilayer. Hydrophilic heads face water, while hydrophobic tails face inward. Small nonpolar molecules can cross the bilayer by simple diffusion. Charged ions usually need a membrane protein.
+
+# Chapter 2: Diffusion and osmosis
+Diffusion is the net movement of particles from higher concentration to lower concentration. It does not require energy from ATP. At equilibrium, particles still move, but there is no net movement in one direction.
+Osmosis is the net movement of water across a selectively permeable membrane toward the side with a higher solute concentration. In a hypotonic solution, an animal cell gains water and may burst. In a hypertonic solution, it loses water and shrinks. In an isotonic solution, there is no net water movement.
+
+# Chapter 3: Active transport
+Active transport moves substances against their concentration or electrochemical gradient and requires energy. The sodium-potassium pump uses ATP to move three sodium ions out of the cell and two potassium ions into the cell per cycle. This helps maintain electrochemical gradients used by nerve and muscle cells.
+Facilitated diffusion uses channels or carriers but moves down a gradient and does not directly consume ATP. The presence of a protein alone does not make transport active. Energy use and direction relative to the gradient are the key distinctions.
+
+# Chapter 4: Enzymes
+Enzymes are biological catalysts that lower the activation energy of a reaction. They do not change the equilibrium position and are not consumed by the reaction. Temperature and pH affect enzyme activity. A competitive inhibitor binds at the active site; sufficiently high substrate concentration can reduce its effect.

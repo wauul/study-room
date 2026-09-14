@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+enum RoomStatus {
+  ACTIVE
+  ENDED
+}
+enum SourceType {
+  COURSE_MATERIAL
+  PAST_EXAM
+}
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  hashedPassword String
+  createdAt DateTime @default(now())
+  rooms Room[]
+  participants Participant[]
+}
+model Room {
+  id String @id @default(cuid())
+  hostUserId String
+  host User @relation(fields: [hostUserId], references: [id])
+  name String
+  studyFocusRaw String? @db.Text
+  studyFocusBoost String[] @default([])
+  studyFocusExclude String[] @default([])
+  status RoomStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  endedAt DateTime?
+  documents Document[]
+  participants Participant[]
+  messages ChatMessage[]
+  retrievalEvents RetrievalEvent[]
+  questions QuizQuestion[]
+  lostClicks LostClick[]
+  summary SessionSummary?
+}
+model Document {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  filename String
+  sourceType SourceType
+  createdAt DateTime @default(now())
+  chunks DocumentChunk[]
+  @@index([roomId])
+}
+model DocumentChunk {
+  id String @id @default(cuid())
+  documentId String
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  content String @db.Text
+  sectionLabel String?
+  position Int
+  embedding Unsupported("vector(384)")?
+  createdAt DateTime @default(now())
+  retrievalEvents RetrievalEvent[]
+  questions QuizQuestion[]
+  @@index([documentId, position])
+}
+model Participant {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id])
+  displayName String
+  email String?
+  joinedAt DateTime @default(now())
+  messages ChatMessage[]
+  quizResults QuizResult[]
+  lostClicks LostClick[]
+  @@unique([roomId, userId])
+}
+model ChatMessage {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  participantId String?
+  participant Participant? @relation(fields: [participantId], references: [id])
+  content String @db.Text
+  citedChunkIds String[] @default([])
+  citations Json?
+  kind String @default("answer")
+  status String @default("complete")
+  createdAt DateTime @default(now())
+  lostClicks LostClick[]
+  @@index([roomId, createdAt])
+}
+model RetrievalEvent {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  chunkId String
+  chunk DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([roomId, createdAt])
+}
+model QuizQuestion {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sourceChunkId String
+  sourceChunk DocumentChunk @relation(fields: [sourceChunkId], references: [id])
+  questionText String
+  options Json
+  correctOptionIndex Int
+  explanation String
+  styledAfterPastExam Boolean @default(false)
+  endsAt DateTime
+  lockedAt DateTime?
+  createdAt DateTime @default(now())
+  results QuizResult[]
+  @@index([roomId])
+}
+model QuizResult {
+  id String @id @default(cuid())
+  quizQuestionId String
+  quizQuestion QuizQuestion @relation(fields: [quizQuestionId], references: [id], onDelete: Cascade)
+  participantId String
+  participant Participant @relation(fields: [participantId], references: [id])
+  submittedDistribution Json
+  score Float
+  zeroProbability Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@unique([quizQuestionId, participantId])
+}
+model LostClick {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  chatMessageId String
+  chatMessage ChatMessage @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
+  participantId String
+  participant Participant @relation(fields: [participantId], references: [id])
+  createdAt DateTime @default(now())
+  @@unique([chatMessageId, participantId])
+}
+model SessionSummary {
+  id String @id @default(cuid())
+  roomId String @unique
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  resultJson Json
+  createdAt DateTime @default(now())
+}
