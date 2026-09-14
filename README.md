@@ -2,6 +2,10 @@
 
 A shared study table: document-grounded streaming Q&A, synchronized confidence quizzes, a live discussion heatmap, and a personalized session rundown.
 
+Live app: https://study-room-ten-blond.vercel.app · Repository: https://github.com/wauul/study-room · Socket service: https://study-room-realtime.onrender.com/health
+
+These deployments currently use manual releases: run `vercel deploy --prod` for the frontend and choose **Deploy latest commit** in Render for the socket service. A GitHub push alone does not update these deployments.
+
 ## Run locally
 
 Use Node 22 and a Postgres database with permission to install pgvector. On Windows ARM, use an x64 Node runtime for the native ONNX dependency.
