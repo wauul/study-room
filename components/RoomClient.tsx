@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import Markdown from 'react-markdown';
 import {
   BookOpen,
   FileText,
@@ -110,6 +111,7 @@ export default function RoomClient({ id }: { id: string }) {
     participant = useRef(""),
     clicked = useRef(new Set<string>());
   const load = useCallback(async () => {
+    try {
     const r = await fetch(`/api/rooms/${id}`);
     if (!r.ok) return;
     const body = await r.json();
@@ -117,6 +119,9 @@ export default function RoomClient({ id }: { id: string }) {
     setMessages(body.messages);
     setSelected((s) => s || body.documents[0]?.id || "");
     return body;
+    } catch {
+      setError('The room could not refresh. Your saved work is safe; reconnecting…');
+    }
   }, [id]);
   useEffect(
     () => () => {
@@ -192,13 +197,24 @@ export default function RoomClient({ id }: { id: string }) {
       socket.current = s;
       s.on("connect", () => {
         setConnected(true);
+        setBusy(false);
+        setEnding(false);
         setError("");
         s.emit("join-room", {}, () => {});
         void load();
       });
       s.on("disconnect", () => setConnected(false));
-      s.on("connect_error", () => {
+      let renewing = false;
+      s.on("connect_error", async (connectionError: Error) => {
         setConnected(false);
+        if (connectionError.message.includes('Session expired') && !renewing) {
+          renewing = true;
+          try {
+            const response = await fetch(`/api/rooms/${id}/join`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName})});
+            if (response.ok) {const fresh = await response.json();s.auth={token:fresh.token};s.connect();return;}
+          } catch { /* The normal reconnect message below remains visible. */ }
+          finally { renewing=false; }
+        }
         setError(
           "Connecting to the study room… The free server may need a moment to wake up.",
         );
@@ -645,9 +661,7 @@ export default function RoomClient({ id }: { id: string }) {
                           <small>Thinking with you…</small>
                         )}
                       </div>
-                      <p className="message-body">
-                        {m.content || "Finding the right words…"}
-                      </p>
+                      <div className="message-body"><Markdown>{m.content || "Finding the right words…"}</Markdown></div>
                       {m.citations?.length ? (
                         <>
                           <div className="cites">

@@ -84,7 +84,7 @@ Three palettes were explored in `docs/design.md` before component code. The sele
 
 1. Create a free Neon project. Run `npx prisma migrate deploy` against its connection URI.
 2. Import the public repository into a Vercel Hobby project. Set the web environment variables and deploy.
-3. Create a Render free Node web service using `render.yaml`, or manually use `npm ci && npx prisma generate` and `npm run server`. Set DATABASE_URL, NEXTAUTH_SECRET, GROQ_API_KEY, GROQ_MODEL, and APP_ORIGIN. Never select a paid plan without consent.
+3. Create a Render free Node web service using `deploy/render.yaml`, or manually use `npm ci && npx prisma generate` and `npm run server`. Set DATABASE_URL, NEXTAUTH_SECRET, GROQ_API_KEY, GROQ_MODEL, and APP_ORIGIN. Never select a paid plan without consent.
 4. Set SOCKET_SERVER_URL on Vercel to the resulting Render HTTPS URL. Set APP_ORIGIN on Render to the canonical Vercel URL. Redeploy after updating environment variables.
 5. Use a verified Resend domain. The default onboarding sender can only deliver to the Resend account owner; a verified domain is required for other recipients.
 

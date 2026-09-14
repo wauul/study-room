@@ -591,8 +591,15 @@ small {
 .message-body {
   font-size: 13px;
   line-height: 1.8;
-  white-space: pre-wrap;
+  white-space: normal;
 }
+.message-body p { margin-bottom: 10px; }
+.message-body :is(h1,h2,h3) { font-size: 16px; letter-spacing: 0; margin: 14px 0 8px; }
+.message-body ul, .message-body ol { padding-left: 20px; margin: 8px 0; }
+.message-body ul { list-style: disc; }
+.message-body ol { list-style: decimal; }
+.message-body blockquote { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); }
+.message-body hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
 .message.question .message-body {
   background: var(--background);
   border: 1px solid var(--line);
