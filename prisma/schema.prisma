@@ -148,3 +148,10 @@ model SessionSummary {
   resultJson Json
   createdAt DateTime @default(now())
 }
+model NewsletterSubscriber {
+  id String @id @default(cuid())
+  email String @unique
+  unsubscribeToken String @unique
+  createdAt DateTime @default(now())
+  unsubscribedAt DateTime?
+}

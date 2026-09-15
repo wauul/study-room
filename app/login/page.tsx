@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { BookOpen, ArrowRight, Eye, EyeOff } from "lucide-react";
 import Header from "@/components/Header";
 export default function Login() {
+  const [visible, setVisible] = useState(false);
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
@@ -40,7 +41,7 @@ export default function Login() {
   return (
     <>
       <Header />
-      <main className="auth-split">
+      <main id="main-content" tabIndex={-1} className="auth-split">
         <section className="auth-art">
           <BookOpen size={70} />
           <span className="eyebrow" style={{ marginBottom: 25 }}>
@@ -77,17 +78,31 @@ export default function Login() {
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  name="password"
-                  type="password"
-                  minLength={10}
-                  maxLength={72}
-                  autoComplete={register ? "new-password" : "current-password"}
-                  required
-                />
-              </label>
+              <div className="stack" style={{ gap: 7 }}>
+                <label htmlFor="password">Password</label>
+                <span className="password-field">
+                  <input
+                    id="password"
+                    name="password"
+                    type={visible ? "text" : "password"}
+                    minLength={10}
+                    maxLength={72}
+                    autoComplete={
+                      register ? "new-password" : "current-password"
+                    }
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="secondary icon-button"
+                    aria-label={visible ? "Hide password" : "Show password"}
+                    aria-pressed={visible}
+                    onClick={() => setVisible(!visible)}
+                  >
+                    {visible ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </span>
+              </div>
               {register && (
                 <small>
                   At least 10 characters. A longer passphrase works well.
@@ -98,7 +113,7 @@ export default function Login() {
                   {error}
                 </div>
               )}
-              <button disabled={busy}>
+              <button disabled={busy} aria-busy={busy}>
                 {busy ? "One moment…" : register ? "Create account" : "Sign in"}
                 <ArrowRight size={16} />
               </button>

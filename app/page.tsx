@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import Header from "@/components/Header";
+import Newsletter from "@/components/Newsletter";
 import {
   ArrowUpRight,
   Plus,
@@ -35,7 +36,7 @@ export default async function Home() {
   return (
     <>
       <Header />
-      <main className="shell">
+      <main id="main-content" tabIndex={-1} className="shell">
         <div className="intro">
           <div>
             <div className="eyebrow">Make room for understanding</div>
@@ -171,6 +172,7 @@ export default async function Home() {
             </section>
           </div>
         </div>
+        <Newsletter />
       </main>
     </>
   );

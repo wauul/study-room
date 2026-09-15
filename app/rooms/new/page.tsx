@@ -31,7 +31,7 @@ export default function NewRoom() {
   return (
     <>
       <Header />
-      <main className="form-wrap">
+      <main id="main-content" tabIndex={-1} className="form-wrap">
         <span className="eyebrow">A fresh page / 01</span>
         <h1 style={{ marginTop: 15 }}>Make some study space.</h1>
         <p className="muted">

@@ -115,7 +115,7 @@ export default function SummaryClient({ id }: { id: string }) {
   return (
     <>
       <Header />
-      <main className="shell">
+      <main id="main-content" tabIndex={-1} className="shell">
         {error && (
           <p className="error" role="alert">
             {error}
@@ -127,8 +127,8 @@ export default function SummaryClient({ id }: { id: string }) {
           </p>
         )}
         {!data ? (
-          <div className="empty">
-            <BookOpen size={40} />
+          <div className="empty" aria-busy={!error} role="status">
+            {error ? <BookOpen size={40} /> : <span className="spinner" />}
             <h2>
               {error ? "The rundown isn’t available." : "Gathering your notes…"}
             </h2>
@@ -159,17 +159,22 @@ export default function SummaryClient({ id }: { id: string }) {
               </div>
             </div>
             <div className="row" style={{ flexWrap: "wrap", marginBottom: 35 }}>
-              <button onClick={pdf} disabled={!!busy}>
+              <button
+                onClick={pdf}
+                disabled={!!busy}
+                aria-busy={busy === "pdf"}
+              >
                 <Download size={16} />
                 {busy === "pdf" ? "Preparing your PDF…" : "Download my PDF"}
               </button>
               <button
                 className="secondary"
                 onClick={() => email()}
+                aria-busy={busy === "email"}
                 disabled={!!busy}
               >
                 <Mail size={16} />
-                Email me a copy
+                {busy === "email" ? "Sending your copy…" : "Email me a copy"}
               </button>
               {data.isHost && (
                 <button
@@ -314,6 +319,13 @@ export default function SummaryClient({ id }: { id: string }) {
             <Link href="/rooms/new" className="button secondary">
               Make room for another session
               <ArrowUpRight size={16} />
+            </Link>
+            <Link
+              href={`/rooms/${id}/notes`}
+              className="button secondary"
+              style={{ marginLeft: 12 }}
+            >
+              Read saved notes & discussion
             </Link>
           </>
         )}

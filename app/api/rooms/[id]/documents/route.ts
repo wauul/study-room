@@ -34,7 +34,10 @@ export async function POST(
       try {
         text = (await parser.getText()).text;
       } catch {
-        throw new HttpError(400, "This PDF could not be read. Use an unencrypted, selectable-text PDF or paste its text.");
+        throw new HttpError(
+          400,
+          "This PDF could not be read. Use an unencrypted, selectable-text PDF or paste its text.",
+        );
       } finally {
         await parser.destroy();
       }

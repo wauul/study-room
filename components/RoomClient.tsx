@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import Markdown from 'react-markdown';
+import Markdown from "react-markdown";
 import {
   BookOpen,
   FileText,
@@ -19,6 +19,9 @@ import {
   Leaf,
 } from "lucide-react";
 import Header from "./Header";
+import Dialog from "./Dialog";
+import CodeBlock from "./CodeBlock";
+import { trackedUrl } from "@/lib/content";
 type Chunk = {
   id: string;
   content: string;
@@ -112,15 +115,28 @@ export default function RoomClient({ id }: { id: string }) {
     clicked = useRef(new Set<string>());
   const load = useCallback(async () => {
     try {
-    const r = await fetch(`/api/rooms/${id}`);
-    if (!r.ok) return;
-    const body = await r.json();
-    setData(body);
-    setMessages(body.messages);
-    setSelected((s) => s || body.documents[0]?.id || "");
-    return body;
+      const r = await fetch(`/api/rooms/${id}`);
+      if (!r.ok) return;
+      const body = await r.json();
+      setData(body);
+      setMessages(body.messages);
+      const requested = new URLSearchParams(window.location.search).get(
+        "document",
+      );
+      setSelected(
+        (s) =>
+          s ||
+          (body.documents.some((d: Doc) => d.id === requested)
+            ? requested
+            : null) ||
+          body.documents[0]?.id ||
+          "",
+      );
+      return body;
     } catch {
-      setError('The room could not refresh. Your saved work is safe; reconnecting…');
+      setError(
+        "The room could not refresh. Your saved work is safe; reconnecting…",
+      );
     }
   }, [id]);
   useEffect(
@@ -185,8 +201,27 @@ export default function RoomClient({ id }: { id: string }) {
       const initial = await load();
       if (initial?.latestRound) {
         const last = initial.latestRound;
-        setQuestion({id:last.id,questionText:last.questionText,options:last.options,endsAt:new Date(last.endsAt).getTime(),serverNow:Date.now(),styledAfterPastExam:last.styledAfterPastExam});
-        setReveal({questionId:last.id,correctOptionIndex:last.correctOptionIndex,explanation:last.explanation,results:last.results.map((r:any)=>({participantId:r.participantId,displayName:r.participant.displayName,distribution:r.submittedDistribution,score:r.zeroProbability?null:r.score,zeroProbability:r.zeroProbability})),leaderboard:[]});
+        setQuestion({
+          id: last.id,
+          questionText: last.questionText,
+          options: last.options,
+          endsAt: new Date(last.endsAt).getTime(),
+          serverNow: Date.now(),
+          styledAfterPastExam: last.styledAfterPastExam,
+        });
+        setReveal({
+          questionId: last.id,
+          correctOptionIndex: last.correctOptionIndex,
+          explanation: last.explanation,
+          results: last.results.map((r: any) => ({
+            participantId: r.participantId,
+            displayName: r.participant.displayName,
+            distribution: r.submittedDistribution,
+            score: r.zeroProbability ? null : r.score,
+            zeroProbability: r.zeroProbability,
+          })),
+          leaderboard: [],
+        });
       }
       setJoined(true);
       const s = io(body.socketUrl, {
@@ -207,13 +242,25 @@ export default function RoomClient({ id }: { id: string }) {
       let renewing = false;
       s.on("connect_error", async (connectionError: Error) => {
         setConnected(false);
-        if (connectionError.message.includes('Session expired') && !renewing) {
+        if (connectionError.message.includes("Session expired") && !renewing) {
           renewing = true;
           try {
-            const response = await fetch(`/api/rooms/${id}/join`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName})});
-            if (response.ok) {const fresh = await response.json();s.auth={token:fresh.token};s.connect();return;}
-          } catch { /* The normal reconnect message below remains visible. */ }
-          finally { renewing=false; }
+            const response = await fetch(`/api/rooms/${id}/join`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ displayName }),
+            });
+            if (response.ok) {
+              const fresh = await response.json();
+              s.auth = { token: fresh.token };
+              s.connect();
+              return;
+            }
+          } catch {
+            /* The normal reconnect message below remains visible. */
+          } finally {
+            renewing = false;
+          }
         }
         setError(
           "Connecting to the study room… The free server may need a moment to wake up.",
@@ -363,7 +410,7 @@ export default function RoomClient({ id }: { id: string }) {
     return (
       <>
         <Header />
-        <main className="form-wrap">
+        <main id="main-content" tabIndex={-1} className="form-wrap">
           <BookOpen className="accent" size={38} />
           <h1 style={{ marginTop: 20 }}>There’s a seat for you.</h1>
           <p className="muted">
@@ -385,7 +432,7 @@ export default function RoomClient({ id }: { id: string }) {
                 {error}
               </p>
             )}
-            <button disabled={busy}>
+            <button disabled={busy} aria-busy={busy}>
               {busy ? "Finding your seat…" : "Join the table"}
               <ArrowUpRight size={16} />
             </button>
@@ -461,7 +508,7 @@ export default function RoomClient({ id }: { id: string }) {
           will open automatically.
         </div>
       )}
-      <main className="workspace">
+      <main id="main-content" tabIndex={-1} className="workspace">
         <aside className="sidebar">
           <section>
             <h2>On the table</h2>
@@ -640,7 +687,11 @@ export default function RoomClient({ id }: { id: string }) {
                 </p>
                 {messages.length ? (
                   messages.map((m) => (
-                    <article key={m.id} className={`message ${m.kind}`}>
+                    <article
+                      key={m.id}
+                      id={`message-${m.id}`}
+                      className={`message ${m.kind}`}
+                    >
                       <div className="message-header">
                         {m.participantId ? (
                           <span
@@ -661,7 +712,30 @@ export default function RoomClient({ id }: { id: string }) {
                           <small>Thinking with you…</small>
                         )}
                       </div>
-                      <div className="message-body"><Markdown>{m.content || "Finding the right words…"}</Markdown></div>
+                      <div className="message-body">
+                        <Markdown
+                          components={{
+                            pre: ({ children }) => (
+                              <CodeBlock>{children}</CodeBlock>
+                            ),
+                            a: ({ href, children }) => (
+                              <a
+                                href={trackedUrl(href || "")}
+                                target={
+                                  /^https?:/.test(href || "")
+                                    ? "_blank"
+                                    : undefined
+                                }
+                                rel="noopener noreferrer"
+                              >
+                                {children}
+                              </a>
+                            ),
+                          }}
+                        >
+                          {m.content || "Finding the right words…"}
+                        </Markdown>
+                      </div>
                       {m.citations?.length ? (
                         <>
                           <div className="cites">
@@ -693,28 +767,29 @@ export default function RoomClient({ id }: { id: string }) {
                           )}
                         </>
                       ) : null}
-                      {!m.participantId && ["complete", "streaming"].includes(m.status) && (
-                        <button
-                          className="quiet lost"
-                          disabled={clicked.current.has(m.id) || ending}
-                          onClick={() =>
-                            emit("lost-click", { messageId: m.id }, (r) => {
-                              if (r.ok) {
-                                clicked.current.add(m.id);
-                                setMessages((old) => [...old]);
-                              }
-                            })
-                          }
-                        >
-                          <Hand size={14} />
-                          {clicked.current.has(m.id)
-                            ? "You raised your hand"
-                            : "I’m lost"}
-                          {m.lostCount
-                            ? ` · ${m.lostCount} ${m.lostCount === 1 ? "person is" : "people are"} lost`
-                            : ""}
-                        </button>
-                      )}
+                      {!m.participantId &&
+                        ["complete", "streaming"].includes(m.status) && (
+                          <button
+                            className="quiet lost"
+                            disabled={clicked.current.has(m.id) || ending}
+                            onClick={() =>
+                              emit("lost-click", { messageId: m.id }, (r) => {
+                                if (r.ok) {
+                                  clicked.current.add(m.id);
+                                  setMessages((old) => [...old]);
+                                }
+                              })
+                            }
+                          >
+                            <Hand size={14} />
+                            {clicked.current.has(m.id)
+                              ? "You raised your hand"
+                              : "I’m lost"}
+                            {m.lostCount
+                              ? ` · ${m.lostCount} ${m.lostCount === 1 ? "person is" : "people are"} lost`
+                              : ""}
+                          </button>
+                        )}
                     </article>
                   ))
                 ) : (
@@ -1006,125 +1081,104 @@ export default function RoomClient({ id }: { id: string }) {
         </section>
       </main>
       {modal && (
-        <div className="modal-backdrop">
-          <section
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={
-              modal === "upload"
-                ? "Add study material"
-                : modal === "focus"
-                  ? "Set study focus"
-                  : "Wrap up session"
-            }
-          >
-            <div className="row between">
-              <h2>
-                {modal === "upload"
-                  ? "Bring something to the table."
-                  : modal === "focus"
-                    ? "Where should we focus?"
-                    : "A good place to pause."}
-              </h2>
-              <button
-                className="quiet"
-                aria-label="Close dialog"
-                onClick={() => setModal(null)}
-                disabled={busy}
-              >
-                <X size={20} />
+        <Dialog
+          title={
+            modal === "upload"
+              ? "Add study material"
+              : modal === "focus"
+                ? "Set study focus"
+                : "End this session?"
+          }
+          onClose={() => setModal(null)}
+          busy={busy}
+        >
+          {modal === "upload" ? (
+            <form onSubmit={upload}>
+              <label>
+                Material type
+                <select name="sourceType">
+                  <option value="COURSE_MATERIAL">Course material</option>
+                  <option value="PAST_EXAM">
+                    Past exam — style reference only
+                  </option>
+                </select>
+              </label>
+              <label>
+                Upload a PDF (up to 4 MB)
+                <input type="file" name="file" accept="application/pdf" />
+              </label>
+              <span className="eyebrow">Or paste your notes</span>
+              <label>
+                Document title
+                <input name="filename" placeholder="Chapter 3 — Cell biology" />
+              </label>
+              <label>
+                Text
+                <textarea
+                  name="text"
+                  rows={6}
+                  maxLength={180000}
+                  placeholder="Paste the chapter or passage here…"
+                />
+              </label>
+              <small>
+                Scanned PDFs need selectable text. Your documents are visible to
+                room participants.
+              </small>
+              {error && <p className="error">{error}</p>}
+              <button disabled={busy} aria-busy={busy}>
+                {busy ? "Reading and indexing your notes…" : "Add to the table"}
+                <Plus size={16} />
               </button>
+            </form>
+          ) : modal === "focus" ? (
+            <form onSubmit={focus}>
+              <label>
+                Study focus
+                <textarea
+                  name="studyFocus"
+                  defaultValue={data?.room.studyFocusRaw}
+                  maxLength={2000}
+                  rows={5}
+                />
+              </label>
+              <small>
+                Try “Focus on chapter 3, skip chapter 5, and use everyday
+                examples.”
+              </small>
+              <button disabled={busy} aria-busy={busy}>
+                {busy ? "Setting the direction…" : "Save our focus"}
+              </button>
+            </form>
+          ) : (
+            <div className="stack">
+              <p style={{ lineHeight: 1.8 }}>
+                Ending is final. Your notes stay saved, but this session cannot
+                be reopened. We’ll gather what clicked, the passages worth
+                another look, and a few next steps. Everyone will move to the
+                shared rundown.
+              </p>
+              <button
+                disabled={
+                  busy || streaming || ending || (!!question && !reveal)
+                }
+                onClick={() => {
+                  setModal(null);
+                  emit("end-session");
+                }}
+              >
+                End session & create rundown
+                <ArrowUpRight size={16} />
+              </button>
+              <button className="secondary" onClick={() => setModal(null)}>
+                Keep studying
+              </button>
+              <small>
+                Finish any active answer or quiz round before wrapping up.
+              </small>
             </div>
-            {modal === "upload" ? (
-              <form onSubmit={upload}>
-                <label>
-                  Material type
-                  <select name="sourceType">
-                    <option value="COURSE_MATERIAL">Course material</option>
-                    <option value="PAST_EXAM">
-                      Past exam — style reference only
-                    </option>
-                  </select>
-                </label>
-                <label>
-                  Upload a PDF (up to 4 MB)
-                  <input type="file" name="file" accept="application/pdf" />
-                </label>
-                <span className="eyebrow">Or paste your notes</span>
-                <label>
-                  Document title
-                  <input
-                    name="filename"
-                    placeholder="Chapter 3 — Cell biology"
-                  />
-                </label>
-                <label>
-                  Text
-                  <textarea
-                    name="text"
-                    rows={6}
-                    maxLength={180000}
-                    placeholder="Paste the chapter or passage here…"
-                  />
-                </label>
-                <small>
-                  Scanned PDFs need selectable text. Your documents are visible
-                  to room participants.
-                </small>
-                {error && <p className="error">{error}</p>}
-                <button disabled={busy}>
-                  {busy
-                    ? "Reading and indexing your notes…"
-                    : "Add to the table"}
-                  <Plus size={16} />
-                </button>
-              </form>
-            ) : modal === "focus" ? (
-              <form onSubmit={focus}>
-                <label>
-                  Study focus
-                  <textarea
-                    name="studyFocus"
-                    defaultValue={data?.room.studyFocusRaw}
-                    maxLength={2000}
-                    rows={5}
-                  />
-                </label>
-                <small>
-                  Try “Focus on chapter 3, skip chapter 5, and use everyday
-                  examples.”
-                </small>
-                <button disabled={busy}>
-                  {busy ? "Setting the direction…" : "Save our focus"}
-                </button>
-              </form>
-            ) : (
-              <div className="stack">
-                <p style={{ lineHeight: 1.8 }}>
-                  We’ll gather what clicked, the passages worth another look,
-                  and a few next steps. Everyone will move to the shared
-                  rundown.
-                </p>
-                <button
-                  disabled={
-                    busy || streaming || ending || (!!question && !reveal)
-                  }
-                  onClick={() => {
-                    setModal(null);
-                    emit("end-session");
-                  }}
-                >
-                  End session & create rundown
-                  <ArrowUpRight size={16} />
-                </button>
-                <small>
-                  Finish any active answer or quiz round before wrapping up.
-                </small>
-              </div>
-            )}
-          </section>
-        </div>
+          )}
+        </Dialog>
       )}
     </>
   );
