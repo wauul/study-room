@@ -40,7 +40,7 @@ export default function SiteTools() {
         !el.closest("input,textarea,select,[contenteditable=true],dialog")
       ) {
         e.preventDefault();
-        if (path === "/search") router.push(searchReturnPath());
+        if (path === "/search" && window.matchMedia("(max-width: 800px)").matches) router.push(searchReturnPath());
         else { rememberSearchOrigin(); router.push("/search"); }
       }
     };

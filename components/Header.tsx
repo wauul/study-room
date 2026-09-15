@@ -9,6 +9,15 @@ export default function Header() {
     [open, setOpen] = useState(false);
   const path = usePathname();
   const router = useRouter();
+  const [mobile, setMobile] = useState(false);
+  const searchOpen = mobile && path === "/search";
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 800px)");
+    const update = () => setMobile(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     setDark(document.documentElement.dataset.theme === "dark");
   }, []);
@@ -46,18 +55,18 @@ export default function Header() {
       <div className="header-actions">
         <Link
           className="search-launch"
-          href={path === "/search" ? "/" : "/search"}
-          aria-label={path === "/search" ? "Close search" : "Search Study Room"}
+          href={searchOpen ? "/" : "/search"}
+          aria-label={searchOpen ? "Close search" : "Search Study Room"}
           onClick={(event) => {
             if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-            if (path === "/search") {
+            if (searchOpen) {
               event.preventDefault();
               router.push(searchReturnPath());
             } else rememberSearchOrigin();
           }}
         >
-          {path === "/search" ? <X size={17} /> : <Search size={17} />}
-          <span>{path === "/search" ? "Close search" : "Search anything"}</span>
+          {searchOpen ? <X size={17} /> : <Search size={17} />}
+          <span>{searchOpen ? "Close search" : "Search anything"}</span>
           <kbd>/</kbd>
         </Link>
         <button
