@@ -1,5 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import SiteTools from "@/components/SiteTools";
 import Footer from "@/components/Footer";
 export const metadata: Metadata = {
@@ -24,6 +26,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {children}
         <Footer />
         <SiteTools />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
