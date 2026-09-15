@@ -82,7 +82,7 @@ Unique “I'm lost” clicks count once per participant per answer. Three clicks
 
 ## Design
 
-Three palettes were explored in `docs/design.md` before component code. The selected paper/terracotta system uses centralized CSS variables, Lora serif headings, quiet sans-serif UI text, fine borders, a dotted reading desk, visible paper edges, and restrained line icons. Terracotta connects actions with the warm end of the discussion heatmap. Responsive layouts stack the reading and conversation areas on small screens. Reduced-motion preferences disable animation.
+The refreshed interface pairs a slate background and violet accents with serif headings, rounded cards, and restrained line icons. Light and dark palettes use centralized CSS variables. The header stays visible; mobile layouts provide a disclosure menu and stacked reading areas. Reduced-motion preferences disable animation. Print styles remove navigation and controls and render the material on white paper. The original palette exploration remains in `docs/design.md` as historical context.
 
 ## Deploy on free tiers
 
@@ -103,3 +103,14 @@ Three palettes were explored in `docs/design.md` before component code. The sele
 - Section detection and focus matching are deliberately approximate. Broad exclusions can leave no retrievable passages; the app reports that state.
 
 Deployment and test evidence is recorded in `docs/verification.md` as checks complete.
+
+
+## Site experience (September 2026)
+
+The shared header is sticky and includes a device-persistent dark/light toggle, responsive mobile navigation and site search. A skip link, visible focus states, native modal focus management, reduced-motion support and print styles are included. Scroll progress and back-to-top controls follow page scrolling. Contact links open the repository issue form with non-identifying UTM campaign labels.
+
+`/guides` contains dated journal posts, `/help` provides expandable FAQs, and `/privacy` explains essential storage. Markdown code blocks include clipboard actions with feedback. `/api/search` returns public content plus membership-filtered rooms, documents, discussions and rundown matches for the current user. Results are capped per content category. `/rooms/[id]/notes` offers a protected read-only archive with direct passage links.
+
+Newsletter signup persists email consent in `NewsletterSubscriber` and displays success only after the server accepts it. It validates consent and email, deduplicates subscriptions, and includes a honeypot. No campaign is sent automatically. Future campaigns must exclude rows with `unsubscribedAt` set and include `/unsubscribe?token=<unsubscribeToken>`. The unsubscribe page requires confirmation and changes state via POST. There is no bulk campaign sender in the app.
+
+Run `TEST_BASE_URL=<deployment> npx tsx tests/site-features.ts` after the original live-session test has saved ignored test credentials. It verifies private search boundaries, archive access, newsletter validation/persistence/deduplication/unsubscribe, and 404 behavior without sending emails.

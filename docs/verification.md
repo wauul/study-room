@@ -32,3 +32,15 @@ Final frontend deployment: `dpl_FV45dcRRqWdQ8JfRRqAvdo3SwGcT`, code commit `0ad2
 Vercel Hobby, Neon free, and Render free are used. Render can sleep when idle, so first connection may be slow. Releases are currently manual. The implementation uses one socket process; horizontal scaling needs shared coordination. Authentication does not include password reset or email ownership verification. See README for document limits and other constraints.
 
 Integration tests create real test accounts, rooms, and AI calls. Credentials and provider secrets are stored only in ignored local files, never in this report.
+
+## September 15 interface refresh
+
+Implemented the requested twenty additions: persistent dark mode, sticky header, mobile navigation, button hover/focus states, scroll progress, back-to-top, loading motion and skeletons, membership-aware site search, skip link, floating contact, expandable FAQ, persisted newsletter signup with success, password visibility, essential-cookie notice, confirmation dialogs, designed 404, print CSS, outbound UTM labels, code clipboard actions, and dated journal posts.
+
+Browser preview checks passed at desktop and 390 px mobile widths: dark/light toggles persisted through reload, mobile navigation expanded and routed correctly, no horizontal page overflow, header remained at top while scrolling, progress advanced, back-to-top returned upward, skip link focused main content, FAQ expanded, newsletter showed server-confirmed success, password input toggled text/password, code clipboard contents matched, and contact dialog returned keyboard focus after Escape. The custom 404 was visually reviewed. No console errors were reported in the final checked preview page.
+
+`tests/site-features.ts` passed locally against the real Neon database: anonymous search contained no private results; authenticated results were limited to membership; saved notes were readable only after authentication; public journal search worked; invalid newsletter email/consent failed; repeated signup produced one database row; unsubscribe persisted; nonexistent paths returned 404. Tests send no emails. All six existing unit tests and TypeScript checks passed. Print rules were reviewed in source; no automated print-render comparison was performed.
+
+Newsletter campaign delivery is intentionally separate from signup storage. Future campaign senders must honor unsubscribe state and include the tokenized unsubscribe link. Contact currently uses the project's GitHub issue form.
+
+Production release `62ca164` is READY at deployment `dpl_8A8vQroMXorQDqtcuk77WAutucmn`. The full site-feature integration suite also passed against the public production URL. The existing biology rundown loaded with the refreshed styles and no console errors. In a new empty test room, the end-session dialog explained finality; choosing Keep studying closed it and returned focus to Wrap up without ending the room. The browser viewport override was reset, and the original rundown was restored. Test newsletter subscriptions were unsubscribed after verification.
