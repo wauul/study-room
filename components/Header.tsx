@@ -105,7 +105,6 @@ export default function Header() {
           <Link href="/">My spaces</Link>
           <Link href="/guides">Study journal</Link>
           <Link href="/help">Help & FAQ</Link>
-          <Link href={path === "/search" ? "/" : "/search"} onClick={(event) => { if (path === "/search") { event.preventDefault(); router.push(searchReturnPath()); } else rememberSearchOrigin(); }}>{path === "/search" ? "Close search" : "Search the site"}</Link>
           <Link href="/rooms/new">Create a room</Link>
           <Link href="/login">Sign in</Link>
         </nav>
