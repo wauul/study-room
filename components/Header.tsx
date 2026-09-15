@@ -1,12 +1,14 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { rememberSearchOrigin, searchReturnPath } from "@/lib/search-navigation";
 import { useEffect, useState } from "react";
 import { BookOpen, Search, Moon, Sun, Menu, X, Plus } from "lucide-react";
 export default function Header() {
   const [dark, setDark] = useState(false),
     [open, setOpen] = useState(false);
   const path = usePathname();
+  const router = useRouter();
   useEffect(() => {
     setDark(document.documentElement.dataset.theme === "dark");
   }, []);
@@ -44,11 +46,18 @@ export default function Header() {
       <div className="header-actions">
         <Link
           className="search-launch"
-          href="/search"
-          aria-label="Search Study Room"
+          href={path === "/search" ? "/" : "/search"}
+          aria-label={path === "/search" ? "Close search" : "Search Study Room"}
+          onClick={(event) => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            if (path === "/search") {
+              event.preventDefault();
+              router.push(searchReturnPath());
+            } else rememberSearchOrigin();
+          }}
         >
-          <Search size={17} />
-          <span>Search anything</span>
+          {path === "/search" ? <X size={17} /> : <Search size={17} />}
+          <span>{path === "/search" ? "Close search" : "Search anything"}</span>
           <kbd>/</kbd>
         </Link>
         <button
@@ -87,7 +96,7 @@ export default function Header() {
           <Link href="/">My spaces</Link>
           <Link href="/guides">Study journal</Link>
           <Link href="/help">Help & FAQ</Link>
-          <Link href="/search">Search the site</Link>
+          <Link href={path === "/search" ? "/" : "/search"} onClick={(event) => { if (path === "/search") { event.preventDefault(); router.push(searchReturnPath()); } else rememberSearchOrigin(); }}>{path === "/search" ? "Close search" : "Search the site"}</Link>
           <Link href="/rooms/new">Create a room</Link>
           <Link href="/login">Sign in</Link>
         </nav>

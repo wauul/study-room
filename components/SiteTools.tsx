@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowUp, MessageCircle, ArrowUpRight } from "lucide-react";
 import Dialog from "./Dialog";
 import { trackedUrl } from "@/lib/content";
+import { rememberSearchOrigin, searchReturnPath } from "@/lib/search-navigation";
 export default function SiteTools() {
   const [progress, setProgress] = useState(0),
     [top, setTop] = useState(false),
@@ -39,7 +40,8 @@ export default function SiteTools() {
         !el.closest("input,textarea,select,[contenteditable=true],dialog")
       ) {
         e.preventDefault();
-        router.push("/search");
+        if (path === "/search") router.push(searchReturnPath());
+        else { rememberSearchOrigin(); router.push("/search"); }
       }
     };
     addEventListener("keydown", key);
