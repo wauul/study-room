@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { db } from "../lib/db";
 import { retrieve } from "../lib/rag/retrieval";
 import { answerPrompt } from "../lib/rag/answer-prompt";
+import { supportedPassages } from "../lib/rag/evidence";
 import { groq, model } from "../lib/ai";
 type Case = {
   filename: string;
@@ -35,10 +36,7 @@ async function main() {
       true,
     );
     const retrievalMs = performance.now() - start;
-    const chunks =
-      candidates[0]?.relevance !== undefined && candidates[0].relevance! < -5
-        ? []
-        : candidates;
+    const chunks = supportedPassages(candidates);
     if (c.expected)
       assert.ok(
         chunks[0]?.content.toLowerCase().includes(c.expected.toLowerCase()),

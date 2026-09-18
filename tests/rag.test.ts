@@ -4,6 +4,7 @@ import { chunkText } from "../lib/rag/chunking";
 import { reconstructText } from "../lib/rag/reconstruct";
 import { focusPatterns } from "../lib/rag/focus";
 import { Heatmap } from "../lib/realtime/heatmap";
+import { supportedPassages } from "../lib/rag/evidence";
 
 test("complete sentences overlap without losing the boundary fact", () => {
   const sentences = Array.from(
@@ -56,4 +57,9 @@ test("aggregate heat restoration matches replayed events", () => {
   const restored = new Heatmap();
   restored.restore("x", 1.95, 60000);
   assert.deepEqual(restored.snapshot(120000), replay.snapshot(120000));
+});
+test("irrelevant candidates never enter generation even alongside a good match", () => {
+  const base={id:"x",content:"text",sectionLabel:null,filename:"source",similarity:0.4};
+  assert.deepEqual(supportedPassages([{...base,relevance:4},{...base,id:"noise",relevance:-10}]).map(c=>c.id),["x"]);
+  assert.equal(supportedPassages([{...base,relevance:-6}]).length,0);
 });
