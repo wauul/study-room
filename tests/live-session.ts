@@ -165,6 +165,23 @@ async function main() {
     await simplification;
     await simpleDone;
     console.log("Lost-click auto-simplification passed");
+    const unsupportedDone = event(sb, "answer-complete"),
+      unsupportedSources = event(sb, "chunk-highlight");
+    await emit(sa, "ask-question", {
+      question: "How many genes are in the mitochondrial genome?",
+    });
+    const [unsupported, emptySources] = await Promise.all([
+      unsupportedDone,
+      unsupportedSources,
+    ]);
+    assert.equal(emptySources.chunkIds.length, 0);
+    assert.match(
+      unsupported.content,
+      /do not|does not|cannot|not (?:contain|provide|establish)|no (?:information|passages)/i,
+    );
+    console.log(
+      "Unsupported question abstention without misleading citations passed",
+    );
     const qA = event(sa, "quiz-question-start"),
       qB = event(sb, "quiz-question-start");
     await emit(sa, "quiz-question-start");

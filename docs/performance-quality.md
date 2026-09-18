@@ -47,3 +47,32 @@ Reranking added approximately **0.4–6 s** locally for 4–20 candidates; model
 6. `npm test`, `npm run typecheck`, `npm run build`; then run `tests/live-session.ts` and `tests/site-features.ts` with `TEST_BASE_URL` pointing to the target deployment. The tests use real services; email is sent only if `TEST_EMAIL` is explicitly set.
 
 Model implementation references: [BGE author model card](https://huggingface.co/BAAI/bge-small-en-v1.5), [cross-encoder ONNX model card](https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2), [pgvector index/filter guidance](https://github.com/pgvector/pgvector).
+
+## Final before/after results
+
+The same seven questions were rerun against the stored replacement chunks and the final prompt/evidence filter. Five expected-source assertions, supported-answer citation checks, and both unsupported-question abstention checks passed. Manual inspection confirmed the useful core answers; this is a small regression sample, not an accuracy guarantee for arbitrary documents. Some legacy section labels still reflect the lost PDF layout.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Correct first passage, five answerable questions | 4/5 with standing focus | 5/5 |
+| Unsupported questions answered with abstention | 1/2 | 2/2 |
+| French PDF chunks exceeding 512 tokens | 31 | 0 |
+| Hypotonic-cell source | Active transport first, osmosis second | Osmosis first; unrelated passages withheld |
+| Duplicate-send prevention | Invented a prevention guarantee from CRM write-back | “The supplied passages do not establish this.” |
+| Initial/history chat page | All messages | At most 50, with earlier-page cursor |
+| Mobile Lighthouse performance | 80 | 98 |
+| Lighthouse accessibility | 100 | 100 |
+| First contentful paint | 2.758 s | 1.230 s |
+| Largest contentful paint | 4.291 s | 2.163 s |
+| Total blocking time | 0 ms | 114.5 ms |
+| Cumulative layout shift | 0.00062 | 0.000006 |
+
+Lighthouse used the same public URL, machine, Edge executable, categories and default mobile simulated throttling. These are single runs and include network/CPU variability: TBT increased while overall paint performance improved. Both JSON reports have no runtime audit error. The CLI exited with a Windows `EPERM` while removing its temporary browser profile **after** saving each completed report.
+
+Local warm retrieval median, including remote database calls, increased from **0.208 s to 2.727 s** because cross-encoding is additional work. Generation median fell from **1.090 s to 0.539 s** in these runs. Do not interpret this as a universal end-to-end latency improvement; quality is deliberately traded for retrieval time. Groq rate limits, cold starts, host load and answer length vary.
+
+All **14 legacy documents** were switched to processing version 2: **218 active replacement chunks**, with all **104 original chunks** checked byte-for-byte and retained as inactive historical sources. A second apply run selected zero documents. The migration is additive; no user content, citation IDs or quiz source rows were deleted.
+
+Final query plans on the larger real room still chose room/document B-tree indexes and a small sort: **0.793–0.844 ms** in three runs. This differs from the initial seven-chunk room, so it is not a controlled speedup comparison. HNSW usage was demonstrated in the scale fixture; production's small-corpus planner choice remains explicitly documented.
+
+Validation includes 11 unit checks, TypeScript, production Next.js build, real two-client streaming/highlighting, simplification, unsupported-question abstention, private quiz submissions, simultaneous reveal, rundown/PDF generation, authenticated search, newsletter persistence/unsubscribe, 404 status, and 50+3 cursor pages with equal timestamps and access checks. No test email was sent. Live frontend search was also checked in the browser; it returned results and loaded Lora from the app's own CSS assets.

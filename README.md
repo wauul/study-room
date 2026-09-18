@@ -114,3 +114,16 @@ The shared header is sticky and includes a device-persistent dark/light toggle, 
 Newsletter signup persists email consent in `NewsletterSubscriber` and displays success only after the server accepts it. It validates consent and email, deduplicates subscriptions, and includes a honeypot. No campaign is sent automatically. Future campaigns must exclude rows with `unsubscribedAt` set and include `/unsubscribe?token=<unsubscribeToken>`. The unsubscribe page requires confirmation and changes state via POST. There is no bulk campaign sender in the app.
 
 Run `TEST_BASE_URL=<deployment> npx tsx tests/site-features.ts` after the original live-session test has saved ignored test credentials. It verifies private search boundaries, archive access, newsletter validation/persistence/deduplication/unsubscribe, and 404 behavior without sending emails.
+
+## Performance & Quality
+
+Measured on 18 September 2026. The diagnosis, model comparisons, query-plan limitations, and reproduction commands are in [the evidence report](docs/performance-quality.md).
+
+- On seven questions from real uploads, correct first-source selection improved from **4/5 to 5/5** for answerable questions; unsupported-question abstention improved from **1/2 to 2/2**. This is a small regression sample, not a general accuracy guarantee.
+- Paragraph/sentence-aware chunks use limited overlap and a real **384-token** cap. Reprocessed all 14 legacy documents into 218 active chunks, preserving all 104 original chunks for historical citations. Legacy whitespace/layout could only be reconstructed because original files were not retained. New uploads retain extracted text.
+- Q&A now reranks 20 candidates with a quantized cross-encoder, removes strongly irrelevant passages, and supplies at most five cited sources. MiniLM embeddings and Groq GPT-OSS-20B were retained: BGE-small and GPT-OSS-120B showed no clear quality gain on the same sample. Structured tasks keep the existing fast model.
+- Added HNSW, confirmed Neon pooling, cached duplicate query embeddings, batched ingestion, grouped heat/leaderboard queries, paginated chat/archive, memoized document/Markdown rendering, batched tokens, and added loading placeholders. PDF export was already server-only; search was already debounced.
+- Deployed mobile Lighthouse: **80 → 98** performance, **100 → 100** accessibility; LCP **4.29 → 2.16 s** after self-hosting the font. TBT increased from **0 → 115 ms**; these are single-run measurements.
+- Tradeoff: local warm retrieval median increased **0.21 → 2.73 s** due to reranking; generation median fell **1.09 → 0.54 s**. HNSW was used in a 10,400-vector temporary scale test, while production's small corpus still favors B-tree filtering plus a sort. No unsupported production index-speedup claim is made. No paid service was added.
+
+Verification: 11 unit checks, TypeScript, production build, real two-client production session through PDF export, unsupported-answer abstention, and site/privacy/pagination integration checks passed. Run `npx tsx scripts/evaluate-rag.ts` for source/citation/abstention regression checks. `npx tsx scripts/reprocess-documents.ts` previews reprocessing; `--apply` executes it idempotently after both services are updated. Private evaluation artifacts remain in ignored `.tools/`.

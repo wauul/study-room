@@ -69,6 +69,10 @@ async function main() {
     select: { roomId: true },
   });
   const allowed = new Set(members.map((m) => m.roomId));
+  const roomPayload = await a.json(`/api/rooms/${saved.roomId}`);
+  assert.ok(roomPayload.documents.some((d: any) => d.chunks.length > 0));
+  assert.ok(!JSON.stringify(roomPayload).includes('"embedding"'));
+  assert.ok(!JSON.stringify(roomPayload).includes('"rawText"'));
   const publicResult = await (
     await fetch(base + "/api/search?q=biology")
   ).json();
