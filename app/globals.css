@@ -1,7 +1,27 @@
-@import url("https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+.room-skeleton {
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+.room-skeleton .skeleton-block {
+  height: 64px;
+  border-radius: 8px;
+  background: var(--soft);
+  animation: room-pulse 1.4s ease-in-out infinite alternate;
+}
+@keyframes room-pulse {
+  to {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-skeleton .skeleton-block {
+    animation: none;
+  }
+}
 :root {
   --background: #f6f3eb;
   --surface: #fffdf7;
@@ -12,7 +32,7 @@
   --line: #deddd1;
   --soft: #efe7da;
   --accent-rgb: 172, 72, 45;
-  --serif: "Lora", Georgia, serif;
+  --serif: var(--font-lora), Georgia, serif;
 }
 * {
   box-sizing: border-box;

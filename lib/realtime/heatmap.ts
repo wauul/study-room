@@ -3,6 +3,9 @@
  * discussion signal, not proof that a topic is poorly understood. */
 export class Heatmap {
   private hits = new Map<string, { value: number; at: number }>();
+  restore(chunkId: string, value: number, at: number) {
+    this.hits.set(chunkId, { value, at });
+  }
   add(chunkId: string, at = Date.now()) {
     const old = this.hits.get(chunkId);
     this.hits.set(chunkId, {

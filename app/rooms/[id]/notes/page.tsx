@@ -5,10 +5,13 @@ import { membership, HttpError } from "@/lib/auth";
 import { db } from "@/lib/db";
 export default async function Notes({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ before?: string; message?: string; chunk?: string }>;
 }) {
   const { id } = await params;
+  const query = await searchParams;
   let access;
   try {
     access = await membership(id);
@@ -19,16 +22,47 @@ export default async function Notes({
       notFound();
     throw e;
   }
-  const [documents, messages] = await Promise.all([
+  const boundary = query.before
+    ? await db.chatMessage.findFirst({
+        where: { id: query.before, roomId: id },
+        select: { id: true, createdAt: true },
+      })
+    : null;
+  const [documents, rows] = await Promise.all([
     db.document.findMany({
       where: { roomId: id },
-      include: { chunks: { orderBy: { position: "asc" } } },
+      include: {
+        chunks: {
+          where: {
+            OR: [
+              { active: true },
+              ...(query.chunk ? [{ id: query.chunk }] : []),
+            ],
+          },
+          orderBy: { position: "asc" },
+        },
+      },
     }),
     db.chatMessage.findMany({
-      where: { roomId: id, status: "complete" },
-      orderBy: { createdAt: "asc" },
+      where: {
+        roomId: id,
+        status: "complete",
+        ...(query.message
+          ? { id: query.message }
+          : boundary
+            ? {
+                OR: [
+                  { createdAt: { lt: boundary.createdAt } },
+                  { createdAt: boundary.createdAt, id: { lt: boundary.id } },
+                ],
+              }
+            : {}),
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: 51,
     }),
   ]);
+  const messages = rows.slice(0, 50).reverse();
   return (
     <>
       <Header />
@@ -62,6 +96,11 @@ export default async function Notes({
               >
                 <div>
                   <h3>{c.sectionLabel || "Passage"}</h3>
+                  {!c.active && (
+                    <p className="muted">
+                      Archived passage — retained for the original citation.
+                    </p>
+                  )}
                   <p style={{ whiteSpace: "pre-wrap" }}>{c.content}</p>
                 </div>
               </section>
@@ -69,6 +108,11 @@ export default async function Notes({
           </article>
         ))}
         <h2>Discussion archive</h2>
+        {(query.before || query.message) && (
+          <Link className="text-link" href={`/rooms/${id}/notes`}>
+            Latest messages
+          </Link>
+        )}
         {messages.map((m) => (
           <article
             className="summary-section"
@@ -83,6 +127,14 @@ export default async function Notes({
             <p style={{ whiteSpace: "pre-wrap", marginTop: 20 }}>{m.content}</p>
           </article>
         ))}
+        {rows.length > 50 && (
+          <Link
+            className="secondary"
+            href={`/rooms/${id}/notes?before=${messages[0].id}`}
+          >
+            Earlier messages
+          </Link>
+        )}
       </main>
     </>
   );

@@ -68,6 +68,7 @@ export async function GET(req: Request) {
         }),
         db.documentChunk.findMany({
           where: {
+            active: true,
             document: { room: access },
             OR: [
               { content: filter },
@@ -118,7 +119,7 @@ export async function GET(req: Request) {
             Math.max(0, m.content.toLowerCase().indexOf(q.toLowerCase()) - 50) +
               220,
           ),
-          href: `/rooms/${m.roomId}/notes#message-${m.id}`,
+          href: `/rooms/${m.roomId}/notes?message=${m.id}#message-${m.id}`,
           type: "Discussion",
         }),
       );

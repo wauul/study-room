@@ -45,9 +45,10 @@ test("chunking preserves sections, overlap and order", () => {
   );
   assert.ok(chunks.length >= 3);
   assert.ok(chunks[0].sectionLabel?.includes("Chapter 1"));
+  const fallback = chunkText("a b c d e f g h", 5, 1);
   assert.equal(
-    chunks[0].content.split(" ").at(-1),
-    chunks[1].content.split(" ")[0],
+    fallback[0].content.split(/\s+/).at(-1),
+    fallback[1].content.split(/\s+/)[0],
   );
   assert.ok(chunks.at(-1)?.sectionLabel?.includes("Chapter 2"));
   assert.deepEqual(

@@ -48,6 +48,8 @@ model Document {
   sourceType SourceType
   createdAt DateTime @default(now())
   chunks DocumentChunk[]
+  rawText String? @db.Text
+  processingVersion Int @default(1)
   @@index([roomId])
 }
 model DocumentChunk {
@@ -57,6 +59,7 @@ model DocumentChunk {
   content String @db.Text
   sectionLabel String?
   position Int
+  active Boolean @default(true)
   embedding Unsupported("vector(384)")?
   createdAt DateTime @default(now())
   retrievalEvents RetrievalEvent[]
@@ -91,6 +94,7 @@ model ChatMessage {
   createdAt DateTime @default(now())
   lostClicks LostClick[]
   @@index([roomId, createdAt])
+  @@index([roomId, createdAt, id])
 }
 model RetrievalEvent {
   id String @id @default(cuid())

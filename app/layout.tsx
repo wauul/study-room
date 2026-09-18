@@ -4,6 +4,12 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import SiteTools from "@/components/SiteTools";
 import Footer from "@/components/Footer";
+import { Lora } from "next/font/google";
+const lora = Lora({
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+  variable: "--font-lora",
+});
 export const metadata: Metadata = {
   title: "Study Room — A little clearer, together",
   description:
@@ -11,7 +17,7 @@ export const metadata: Metadata = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={lora.variable} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import Markdown from "react-markdown";
 import {
@@ -84,7 +84,74 @@ type RoomData = {
   documents: Doc[];
   messages: Message[];
   isHost: boolean;
+  nextCursor: string | null;
 };
+const MessageBody = memo(function MessageBody({
+  content,
+}: {
+  content: string;
+}) {
+  return (
+    <Markdown
+      components={{
+        pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+        a: ({ href, children }) => (
+          <a
+            href={trackedUrl(href || "")}
+            target={/^https?:/.test(href || "") ? "_blank" : undefined}
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        ),
+      }}
+    >
+      {content || "Finding the right words…"}
+    </Markdown>
+  );
+});
+const DocumentPassages = memo(function DocumentPassages({
+  doc,
+  active,
+  heat,
+}: {
+  doc: Doc;
+  active: string[];
+  heat: Record<string, number>;
+}) {
+  const maxHeat = Math.max(1, ...Object.values(heat));
+  return (
+    <>
+      {doc.chunks.map((c, i) => (
+        <section
+          id={`chunk-${c.id}`}
+          key={c.id}
+          className={`passage ${active.includes(c.id) ? "selected" : ""}`}
+          style={{
+            backgroundColor: `rgba(var(--accent-rgb),${((heat[c.id] || 0) / maxHeat) * 0.22})`,
+          }}
+        >
+          <div className="citation-label">
+            PASSAGE {String(i + 1).padStart(2, "0")}
+            {active.includes(c.id) ? " / IN THE CONVERSATION" : ""}
+          </div>
+          {c.sectionLabel && <h3>{c.sectionLabel}</h3>}
+          <p style={{ whiteSpace: "pre-wrap" }}>{c.content}</p>
+        </section>
+      ))}
+    </>
+  );
+});
+function RoomSkeleton({ label }: { label: string }) {
+  return (
+    <div className="room-skeleton" role="status" aria-label={label}>
+      <span className="sr-only">{label}</span>
+      {[1, 2, 3].map((n) => (
+        <div key={n} className="skeleton-block" />
+      ))}
+    </div>
+  );
+}
 export default function RoomClient({ id }: { id: string }) {
   const [data, setData] = useState<RoomData | null>(null),
     [joined, setJoined] = useState(false),
@@ -108,6 +175,13 @@ export default function RoomClient({ id }: { id: string }) {
     [leaders, setLeaders] = useState<Leader[]>([]),
     [remaining, setRemaining] = useState(20),
     [ending, setEnding] = useState(false);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const messagesRef = useRef(messages),
+    historyInitialized = useRef(false),
+    prepending = useRef(false),
+    followTail = useRef(true);
+  messagesRef.current = messages;
   const socket = useRef<Socket | null>(null),
     scroll = useRef<HTMLDivElement>(null),
     offset = useRef(0),
@@ -116,10 +190,38 @@ export default function RoomClient({ id }: { id: string }) {
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/rooms/${id}`);
-      if (!r.ok) return;
+      if (!r.ok) throw new Error("Room refresh failed");
       const body = await r.json();
       setData(body);
-      setMessages(body.messages);
+      setMessages((old) => {
+        if (
+          old.length &&
+          body.messages.length &&
+          !body.messages.some((m: Message) => old.some((x) => x.id === m.id))
+        ) {
+          setHistoryCursor(body.nextCursor);
+          return body.messages;
+        }
+        const fresh = new Map<string, Message>(
+          body.messages.map((m: Message) => [m.id, m]),
+        );
+        return [
+          ...old.map((m) => {
+            const next = fresh.get(m.id);
+            fresh.delete(m.id);
+            return m.status === "streaming" &&
+              next?.status === "streaming" &&
+              m.content.length > next.content.length
+              ? m
+              : next || m;
+          }),
+          ...fresh.values(),
+        ];
+      });
+      if (!historyInitialized.current) {
+        setHistoryCursor(body.nextCursor);
+        historyInitialized.current = true;
+      }
       const requested = new URLSearchParams(window.location.search).get(
         "document",
       );
@@ -148,11 +250,17 @@ export default function RoomClient({ id }: { id: string }) {
   useEffect(() => {
     if (!joined) return;
     const timer = setInterval(() => {
-      if (!messages.some((m) => m.status === "streaming")) void load();
+      if (!messagesRef.current.some((m) => m.status === "streaming"))
+        void load();
     }, 30000);
     return () => clearInterval(timer);
-  }, [joined, load, messages]);
+  }, [joined, load]);
   useEffect(() => {
+    if (prepending.current) {
+      prepending.current = false;
+      return;
+    }
+    if (!followTail.current) return;
     scroll.current?.scrollTo({
       top: scroll.current.scrollHeight,
       behavior: "smooth",
@@ -174,7 +282,7 @@ export default function RoomClient({ id }: { id: string }) {
         ),
       );
     tick();
-    const timer = setInterval(tick, 200);
+    const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [question]);
   async function join(e: React.FormEvent<HTMLFormElement>) {
@@ -198,6 +306,7 @@ export default function RoomClient({ id }: { id: string }) {
       if (!r.ok) throw new Error(body.error);
       participant.current = body.participantId;
       setHost(body.isHost);
+      setJoined(true);
       const initial = await load();
       if (initial?.latestRound) {
         const last = initial.latestRound;
@@ -609,7 +718,9 @@ export default function RoomClient({ id }: { id: string }) {
             </div>
           </div>
           <article className="paper">
-            {doc ? (
+            {!data ? (
+              <RoomSkeleton label="Loading document viewer" />
+            ) : doc ? (
               <>
                 <div className="eyebrow">
                   {doc.sourceType === "PAST_EXAM"
@@ -617,23 +728,7 @@ export default function RoomClient({ id }: { id: string }) {
                     : "Course material / Shared notes"}
                 </div>
                 <h2>{doc.filename.replace(/\.pdf$/i, "")}</h2>
-                {doc.chunks.map((c, i) => (
-                  <section
-                    id={`chunk-${c.id}`}
-                    key={c.id}
-                    className={`passage ${active.includes(c.id) ? "selected" : ""}`}
-                    style={{
-                      backgroundColor: `rgba(var(--accent-rgb),${((heat[c.id] || 0) / maxHeat) * 0.22})`,
-                    }}
-                  >
-                    <div className="citation-label">
-                      PASSAGE {String(i + 1).padStart(2, "0")}
-                      {active.includes(c.id) ? " / IN THE CONVERSATION" : ""}
-                    </div>
-                    {c.sectionLabel && <h3>{c.sectionLabel}</h3>}
-                    <p>{c.content}</p>
-                  </section>
-                ))}
+                <DocumentPassages doc={doc} active={active} heat={heat} />
                 <div className="paper-footer">
                   <span>STUDY ROOM / YOUR SHARED COPY</span>
                   <span>{doc.chunks.length} passages</span>
@@ -679,7 +774,60 @@ export default function RoomClient({ id }: { id: string }) {
           </div>
           {mode === "qa" ? (
             <>
-              <div className="chat-scroll" ref={scroll}>
+              <div
+                className="chat-scroll"
+                ref={scroll}
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  followTail.current =
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                }}
+              >
+                {!data && <RoomSkeleton label="Loading chat history" />}
+                {historyCursor && (
+                  <button
+                    className="secondary"
+                    disabled={historyBusy}
+                    onClick={async () => {
+                      setHistoryBusy(true);
+                      try {
+                        const response = await fetch(
+                          `/api/rooms/${id}/messages?before=${encodeURIComponent(historyCursor)}`,
+                        );
+                        if (!response.ok)
+                          throw new Error("Could not load earlier messages.");
+                        const page = await response.json();
+                        const height = scroll.current?.scrollHeight || 0,
+                          top = scroll.current?.scrollTop || 0;
+                        prepending.current = true;
+                        setMessages((old) => [
+                          ...page.messages.filter(
+                            (m: Message) => !old.some((x) => x.id === m.id),
+                          ),
+                          ...old,
+                        ]);
+                        setHistoryCursor(page.nextCursor);
+                        requestAnimationFrame(() => {
+                          if (scroll.current)
+                            scroll.current.scrollTop =
+                              top + scroll.current.scrollHeight - height;
+                        });
+                      } catch (e) {
+                        setError(
+                          e instanceof Error
+                            ? e.message
+                            : "Could not load history.",
+                        );
+                      } finally {
+                        setHistoryBusy(false);
+                      }
+                    }}
+                  >
+                    {historyBusy
+                      ? "Loading earlier messages…"
+                      : "Load earlier messages"}
+                  </button>
+                )}
                 <p className="chat-intro">
                   One conversation, shared by everyone.
                   <br />
@@ -713,28 +861,7 @@ export default function RoomClient({ id }: { id: string }) {
                         )}
                       </div>
                       <div className="message-body">
-                        <Markdown
-                          components={{
-                            pre: ({ children }) => (
-                              <CodeBlock>{children}</CodeBlock>
-                            ),
-                            a: ({ href, children }) => (
-                              <a
-                                href={trackedUrl(href || "")}
-                                target={
-                                  /^https?:/.test(href || "")
-                                    ? "_blank"
-                                    : undefined
-                                }
-                                rel="noopener noreferrer"
-                              >
-                                {children}
-                              </a>
-                            ),
-                          }}
-                        >
-                          {m.content || "Finding the right words…"}
-                        </Markdown>
+                        <MessageBody content={m.content} />
                       </div>
                       {m.citations?.length ? (
                         <>
@@ -749,6 +876,12 @@ export default function RoomClient({ id }: { id: string }) {
                                     d.chunks.some((x) => x.id === c.id),
                                   );
                                   if (d) setSelected(d.id);
+                                  else
+                                    window.open(
+                                      `/rooms/${id}/notes?chunk=${encodeURIComponent(c.id)}#chunk-${c.id}`,
+                                      "_blank",
+                                      "noopener,noreferrer",
+                                    );
                                 }}
                               >
                                 [{i + 1}] {c.sectionLabel || "Passage"} ·{" "}
@@ -1055,6 +1188,7 @@ export default function RoomClient({ id }: { id: string }) {
                   )}
                 </div>
               )}
+              {!connected && <RoomSkeleton label="Loading quiz leaderboard" />}
               {leaders.length > 0 && (
                 <section style={{ marginTop: 30 }}>
                   <span className="eyebrow">

@@ -1,0 +1,6 @@
+[
+  {"filename":"cell-biology.txt","question":"How does active transport differ from facilitated diffusion?","expected":"Active transport"},
+  {"filename":"cell-biology.txt","question":"What happens to an animal cell in a hypotonic solution?","expected":"hypotonic"},
+  {"filename":"cell-biology.txt","question":"How many sodium and potassium ions does the pump move per cycle?","expected":"three sodium"},
+  {"filename":"cell-biology.txt","question":"How many genes are in the mitochondrial genome?","unsupported":true}
+]

@@ -142,6 +142,50 @@ async function main() {
   );
   assert.equal((await fetch(base + "/a-page-that-does-not-exist")).status, 404);
   console.log("Custom 404 status passed");
+  const fixture = await db.room.create({
+    data: {
+      name: "Pagination verification",
+      hostUserId: user.id,
+      participants: { create: { userId: user.id, displayName: "Verifier" } },
+    },
+  });
+  try {
+    const at = new Date();
+    await db.chatMessage.createMany({
+      data: Array.from({ length: 53 }, (_, i) => ({
+        roomId: fixture.id,
+        content: `History ${i}`,
+        createdAt: at,
+      })),
+    });
+    const initial = await a.json(`/api/rooms/${fixture.id}`);
+    assert.equal(initial.messages.length, 50);
+    assert.ok(initial.nextCursor);
+    assert.ok(!JSON.stringify(initial).includes('"embedding"'));
+    const older = await a.json(
+      `/api/rooms/${fixture.id}/messages?before=${initial.nextCursor}`,
+    );
+    assert.equal(older.messages.length, 3);
+    assert.equal(older.nextCursor, null);
+    assert.equal(
+      new Set([...initial.messages, ...older.messages].map((m) => m.id)).size,
+      53,
+    );
+    assert.equal(
+      (await a.request(`/api/rooms/${fixture.id}/messages?before=unknown`))
+        .status,
+      400,
+    );
+    assert.equal(
+      (await fetch(`${base}/api/rooms/${fixture.id}/messages`)).status,
+      401,
+    );
+    console.log(
+      "History: 50+3 cursor pages, equal timestamps, no duplicate messages, invalid cursor and anonymous access passed",
+    );
+  } finally {
+    await db.room.delete({ where: { id: fixture.id } });
+  }
 }
 main()
   .catch((e) => {

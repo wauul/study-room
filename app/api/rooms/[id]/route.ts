@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { membership } from "@/lib/auth";
 import { apiError } from "@/lib/http";
+import { chatHistory } from "@/lib/chat-history";
 export async function GET(
   _: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -12,8 +13,13 @@ export async function GET(
     const [documents, messages, participants, latestRound] = await Promise.all([
       db.document.findMany({
         where: { roomId: id },
-        include: {
+        select: {
+          id: true,
+          filename: true,
+          sourceType: true,
+          createdAt: true,
           chunks: {
+            where: { active: true },
             orderBy: { position: "asc" },
             select: {
               id: true,
@@ -25,14 +31,7 @@ export async function GET(
         },
         orderBy: { createdAt: "asc" },
       }),
-      db.chatMessage.findMany({
-        where: { roomId: id },
-        include: {
-          participant: { select: { displayName: true } },
-          _count: { select: { lostClicks: true } },
-        },
-        orderBy: { createdAt: "asc" },
-      }),
+      chatHistory(id),
       db.participant.findMany({
         where: { roomId: id },
         select: { id: true, displayName: true },
@@ -56,11 +55,8 @@ export async function GET(
       },
       isHost: room.hostUserId === user.id,
       documents,
-      messages: messages.map((m) => ({
-        ...m,
-        displayName: m.participant?.displayName,
-        lostCount: m._count.lostClicks,
-      })),
+      messages: messages.messages,
+      nextCursor: messages.nextCursor,
       participants,
       latestRound,
     });

@@ -38,37 +38,47 @@ export async function buildSummary(
     where: { id: roomId },
     include: {
       documents: { include: { chunks: true } },
-      retrievalEvents: true,
       lostClicks: { include: { chatMessage: true } },
       questions: { include: { results: true } },
     },
   });
-  const facts = room.documents.flatMap((d) =>
-    d.chunks.map((c) => ({
-      sourceChunkId: c.id,
-      topic: c.sectionLabel || d.filename,
-      retrievals: room.retrievalEvents.filter((e) => e.chunkId === c.id).length,
-      decayedHeat: heatmap[c.id] || 0,
-      lostClicks: room.lostClicks.filter((l) =>
-        l.chatMessage.citedChunkIds.includes(c.id),
-      ).length,
-      quiz: room.questions
-        .filter((q) => q.sourceChunkId === c.id)
-        .flatMap((q) =>
-          q.results.map((r) => ({
-            question: q.questionText,
-            score: r.zeroProbability ? "negative infinity" : r.score,
-            confusionWeight: confusionWeight(
-              r.submittedDistribution as number[],
-              q.correctOptionIndex,
-            ),
-            probabilityOnTruth: (r.submittedDistribution as number[])[
-              q.correctOptionIndex
-            ],
-          })),
-        ),
-    })),
+  const retrievalCounts = new Map(
+    (
+      await db.retrievalEvent.groupBy({
+        by: ["chunkId"],
+        where: { roomId },
+        _count: { _all: true },
+      })
+    ).map((row) => [row.chunkId, row._count._all]),
   );
+  const facts = room.documents
+    .flatMap((d) =>
+      d.chunks.map((c) => ({
+        sourceChunkId: c.id,
+        topic: c.sectionLabel || d.filename,
+        retrievals: retrievalCounts.get(c.id) || 0,
+        decayedHeat: heatmap[c.id] || 0,
+        lostClicks: room.lostClicks.filter((l) =>
+          l.chatMessage.citedChunkIds.includes(c.id),
+        ).length,
+        quiz: room.questions
+          .filter((q) => q.sourceChunkId === c.id)
+          .flatMap((q) =>
+            q.results.map((r) => ({
+              question: q.questionText,
+              score: r.zeroProbability ? "negative infinity" : r.score,
+              confusionWeight: confusionWeight(
+                r.submittedDistribution as number[],
+                q.correctOptionIndex,
+              ),
+              probabilityOnTruth: (r.submittedDistribution as number[])[
+                q.correctOptionIndex
+              ],
+            })),
+          ),
+      })),
+    )
+    .filter((f) => f.retrievals > 0 || f.lostClicks > 0 || f.quiz.length > 0);
   const result = await structured(
     'Create an evidence-based study rundown. Return {wellUnderstood:[{topic,evidence,sourceChunkId}],strugglePoints:[{topic,evidence,sourceChunkId,severity:"high"|"medium"|"low"}],studyTips:string[],suggestedNextSteps:string}. Every evidence string MUST cite actual numeric facts from input. Use only supplied sourceChunkIds. Retrieval frequency alone does NOT establish confusion. No quiz data means no demonstrated mastery. No activity means explicitly insufficient evidence; do not invent achievements or struggles.',
     JSON.stringify({ focus: room.studyFocusRaw, facts }),
