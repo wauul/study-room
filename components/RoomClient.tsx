@@ -1,4 +1,6 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import Markdown from "react-markdown";
@@ -7,7 +9,7 @@ import {
   FileText,
   Plus,
   Link as LinkIcon,
-  ArrowUpRight,
+  Pencil,
   Send,
   MessageCircle,
   ChartNoAxesCombined,
@@ -16,7 +18,6 @@ import {
   X,
   Check,
   Clock,
-  Leaf,
 } from "lucide-react";
 import Header from "./Header";
 import Dialog from "./Dialog";
@@ -91,6 +92,7 @@ const MessageBody = memo(function MessageBody({
 }: {
   content: string;
 }) {
+  const { t } = useLanguage();
   return (
     <Markdown
       components={{
@@ -106,7 +108,7 @@ const MessageBody = memo(function MessageBody({
         ),
       }}
     >
-      {content || "Finding the right words…"}
+      {content || t("Finding the right words…")}
     </Markdown>
   );
 });
@@ -119,6 +121,7 @@ const DocumentPassages = memo(function DocumentPassages({
   active: string[];
   heat: Record<string, number>;
 }) {
+  const { t, locale } = useLanguage();
   const maxHeat = Math.max(1, ...Object.values(heat));
   return (
     <>
@@ -132,8 +135,8 @@ const DocumentPassages = memo(function DocumentPassages({
           }}
         >
           <div className="citation-label">
-            PASSAGE {String(i + 1).padStart(2, "0")}
-            {active.includes(c.id) ? " / IN THE CONVERSATION" : ""}
+            {t("PASSAGE")} {String(i + 1).padStart(2, "0")}
+            {active.includes(c.id) ? t(" / IN THE CONVERSATION") : ""}
           </div>
           {c.sectionLabel && <h3>{c.sectionLabel}</h3>}
           <p style={{ whiteSpace: "pre-wrap" }}>{c.content}</p>
@@ -143,6 +146,7 @@ const DocumentPassages = memo(function DocumentPassages({
   );
 });
 function RoomSkeleton({ label }: { label: string }) {
+  const { t, locale } = useLanguage();
   return (
     <div className="room-skeleton" role="status" aria-label={label}>
       <span className="sr-only">{label}</span>
@@ -153,6 +157,7 @@ function RoomSkeleton({ label }: { label: string }) {
   );
 }
 export default function RoomClient({ id }: { id: string }) {
+  const { t, locale } = useLanguage();
   const [data, setData] = useState<RoomData | null>(null),
     [joined, setJoined] = useState(false),
     [error, setError] = useState(""),
@@ -164,6 +169,9 @@ export default function RoomClient({ id }: { id: string }) {
     [heat, setHeat] = useState<Record<string, number>>({}),
     [active, setActive] = useState<string[]>([]),
     [selected, setSelected] = useState(""),
+    [mobilePane, setMobilePane] = useState<
+      "library" | "reading" | "discussion"
+    >("discussion"),
     [mode, setMode] = useState<"qa" | "quiz">("qa"),
     [modal, setModal] = useState<"upload" | "focus" | "end" | null>(null),
     [busy, setBusy] = useState(false),
@@ -175,6 +183,9 @@ export default function RoomClient({ id }: { id: string }) {
     [leaders, setLeaders] = useState<Leader[]>([]),
     [remaining, setRemaining] = useState(20),
     [ending, setEnding] = useState(false);
+  const [noticeValues, setNoticeValues] = useState<
+    Record<string, string | number>
+  >({});
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyBusy, setHistoryBusy] = useState(false);
   const messagesRef = useRef(messages),
@@ -263,14 +274,19 @@ export default function RoomClient({ id }: { id: string }) {
     if (!followTail.current) return;
     scroll.current?.scrollTo({
       top: scroll.current.scrollHeight,
-      behavior: "smooth",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
     });
   }, [messages]);
   useEffect(() => {
     if (active[0])
-      document
-        .getElementById(`chunk-${active[0]}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      document.getElementById(`chunk-${active[0]}`)?.scrollIntoView({
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "instant"
+          : "smooth",
+        block: "center",
+      });
   }, [active, selected]);
   useEffect(() => {
     if (!question) return;
@@ -483,7 +499,8 @@ export default function RoomClient({ id }: { id: string }) {
       await load();
       setSelected(body.id);
       setModal(null);
-      setNotice(`${body.filename} is ready — ${body.chunks} passages added.`);
+      setNoticeValues({ filename: body.filename, count: body.chunks });
+      setNotice("{filename} is ready — {count} passages added.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -521,29 +538,29 @@ export default function RoomClient({ id }: { id: string }) {
         <Header />
         <main id="main-content" tabIndex={-1} className="form-wrap">
           <BookOpen className="accent" size={38} />
-          <h1 style={{ marginTop: 20 }}>There’s a seat for you.</h1>
+          <h1 style={{ marginTop: 20 }}>{t("Join the study room")}</h1>
           <p className="muted">
-            Enter your name to join this study room. You’ll need to sign in if
-            you haven’t already.
+            {t(
+              "Enter your name to join this study room. You’ll need to sign in if you haven’t already.",
+            )}
           </p>
           <form onSubmit={join}>
             <label>
-              Your name at the table
+              {t("Your display name")}
               <input
                 name="displayName"
                 maxLength={50}
                 required
-                placeholder="Your first name"
+                placeholder={t("Your first name")}
               />
             </label>
             {error && (
               <p className="error" role="alert">
-                {error}
+                {t(error)}
               </p>
             )}
             <button disabled={busy} aria-busy={busy}>
-              {busy ? "Finding your seat…" : "Join the table"}
-              <ArrowUpRight size={16} />
+              {busy ? t("Joining…") : t("Join room")}
             </button>
           </form>
         </main>
@@ -554,16 +571,19 @@ export default function RoomClient({ id }: { id: string }) {
       <Header />
       <div className="workspace-head">
         <div>
-          <div className="eyebrow">
-            Your shared study table <span className="accent">/</span>{" "}
-            {connected ? "Connected" : "Reconnecting"}
-          </div>
-          <h1>{data?.room.name || "Study room"}</h1>
+          <p className="connection-status" role="status">
+            <span
+              className={`connection-dot ${connected ? "online" : ""}`}
+              aria-hidden="true"
+            />
+            {connected ? t("Live session") : t("Reconnecting…")}
+          </p>
+          <h1>{data?.room.name || t("Study room")}</h1>
         </div>
         <div className="actions">
           <span className="tag">
             <span className="dot" />
-            {people.length} at the table
+            {people.length} online
           </span>
           <button
             className="secondary"
@@ -577,23 +597,22 @@ export default function RoomClient({ id }: { id: string }) {
             }}
           >
             <LinkIcon size={14} />
-            Invite a friend
+            {t("Copy invite link")}
           </button>
           {isHost && (
             <button className="quiet" onClick={() => setModal("end")}>
-              Wrap up
-              <ArrowUpRight size={14} />
+              {t("End session")}
             </button>
           )}
         </div>
       </div>
       {error && (
         <div role="alert" className="error">
-          {error}
+          {t(error)}
           <button
             className="quiet"
             onClick={() => setError("")}
-            aria-label="Dismiss error"
+            aria-label={t("Dismiss error")}
           >
             <X size={14} />
           </button>
@@ -601,11 +620,11 @@ export default function RoomClient({ id }: { id: string }) {
       )}
       {notice && (
         <div role="status" className="notice row between">
-          {notice}
+          {t(notice, noticeValues)}
           <button
             className="quiet"
             onClick={() => setNotice("")}
-            aria-label="Dismiss notification"
+            aria-label={t("Dismiss notification")}
           >
             <X size={14} />
           </button>
@@ -613,26 +632,55 @@ export default function RoomClient({ id }: { id: string }) {
       )}
       {ending && (
         <div className="notice">
-          Gathering the group’s lightbulb moments and next steps… Your rundown
-          will open automatically.
+          {t(
+            "Gathering the group’s lightbulb moments and next steps… Your rundown will open automatically.",
+          )}
         </div>
       )}
-      <main id="main-content" tabIndex={-1} className="workspace">
-        <aside className="sidebar">
+      <nav className="workspace-switcher" aria-label={t("Workspace views")}>
+        {(["library", "reading", "discussion"] as const).map((pane) => (
+          <button
+            key={pane}
+            aria-pressed={mobilePane === pane}
+            aria-controls={`workspace-${pane}`}
+            onClick={() => setMobilePane(pane)}
+          >
+            {pane === "library"
+              ? t("Material")
+              : pane === "reading"
+                ? t("Read")
+                : t("Discuss")}
+          </button>
+        ))}
+      </nav>
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="workspace"
+        data-pane={mobilePane}
+      >
+        <aside
+          className="sidebar"
+          id="workspace-library"
+          aria-label={t("Study material and participants")}
+        >
           <section>
-            <h2>On the table</h2>
+            <h2>{t("Study material")}</h2>
             {data?.documents.map((d) => (
               <button
                 key={d.id}
                 className={`document-link ${d.id === selected ? "active" : ""}`}
-                onClick={() => setSelected(d.id)}
+                onClick={() => {
+                  setSelected(d.id);
+                  setMobilePane("reading");
+                }}
               >
                 <FileText size={17} />
                 <span>
                   {d.filename}
                   <small>
                     {d.sourceType === "PAST_EXAM"
-                      ? "Past exam · style reference"
+                      ? t("Past exam · style reference")
                       : `${d.chunks.length} passages`}
                   </small>
                 </span>
@@ -640,40 +688,42 @@ export default function RoomClient({ id }: { id: string }) {
             ))}
             {!data?.documents.length && (
               <p className="muted" style={{ fontSize: 12, lineHeight: 1.7 }}>
-                No notes yet. Bring something to work through.
+                {t("No notes yet. Bring something to work through.")}
               </p>
             )}
             {isHost && (
               <button
                 className="quiet"
-                style={{ fontSize: 11, marginTop: 12 }}
+                style={{ marginTop: 12 }}
                 onClick={() => setModal("upload")}
               >
                 <Plus size={14} />
-                Add study material
+                {t("Add study material")}
               </button>
             )}
           </section>
           <section>
             <div className="row between">
-              <h2>Our focus</h2>
+              <h2>{t("Our focus")}</h2>
               {isHost && (
                 <button
                   className="quiet"
-                  aria-label="Edit study focus"
+                  aria-label={t("Edit study focus")}
                   onClick={() => setModal("focus")}
                 >
-                  <ArrowUpRight size={13} />
+                  <Pencil size={16} />
                 </button>
               )}
             </div>
             <p className="focus">
               {data?.room.studyFocusRaw ||
-                "Follow the questions. See where they take us."}
+                t(
+                  "No focus set. Questions will use the course material in this room.",
+                )}
             </p>
           </section>
           <section className="people-section">
-            <h2>At the table</h2>
+            <h2>{t("Participants")}</h2>
             <div className="participants">
               {people.map((p) => (
                 <div className="row" key={p.id}>
@@ -682,65 +732,59 @@ export default function RoomClient({ id }: { id: string }) {
                   </span>
                   <span>
                     {p.displayName}
-                    {p.id === participant.current ? " (you)" : ""}
+                    {p.id === participant.current ? t(" (you)") : ""}
                   </span>
                   <span className="dot" style={{ marginLeft: "auto" }} />
                 </div>
               ))}
             </div>
           </section>
-          <section style={{ marginTop: "auto" }}>
-            <Leaf size={22} className="accent" />
-            <p
-              style={{
-                fontFamily: "var(--serif)",
-                fontStyle: "italic",
-                fontSize: 12,
-                lineHeight: 1.7,
-                marginTop: 10,
-              }}
-            >
-              Understanding takes a little time.
-              <br />
-              You’re in good company.
-            </p>
-          </section>
+          <p className="sidebar-note">
+            {t("Course material grounds answers. Past exams guide quiz style.")}
+          </p>
         </aside>
-        <section className="work-area">
+        <section
+          className="work-area"
+          id="workspace-reading"
+          aria-label={t("Document reader")}
+        >
           <div className="viewer-toolbar">
-            <span>{doc ? "READING TOGETHER" : "A FRESH PAGE"}</span>
+            <span>{doc ? t("READING TOGETHER") : t("A FRESH PAGE")}</span>
             <div className="heat-scale">
-              <span>Less discussed</span>
+              <span>{t("Less discussed")}</span>
               {[0.1, 0.25, 0.5, 0.8].map((n) => (
                 <i key={n} style={{ opacity: n }} />
               ))}
-              <span>More</span>
+              <span>{t("More")}</span>
             </div>
           </div>
           <article className="paper">
             {!data ? (
-              <RoomSkeleton label="Loading document viewer" />
+              <RoomSkeleton label={t("Loading document viewer")} />
             ) : doc ? (
               <>
-                <div className="eyebrow">
-                  {doc.sourceType === "PAST_EXAM"
-                    ? "Past paper / Style reference"
-                    : "Course material / Shared notes"}
-                </div>
                 <h2>{doc.filename.replace(/\.pdf$/i, "")}</h2>
+                <div className="meta-label">
+                  {doc.sourceType === "PAST_EXAM"
+                    ? t("Past paper / Style reference")
+                    : t("Course material / Shared notes")}
+                </div>
                 <DocumentPassages doc={doc} active={active} heat={heat} />
                 <div className="paper-footer">
-                  <span>STUDY ROOM / YOUR SHARED COPY</span>
-                  <span>{doc.chunks.length} passages</span>
+                  <span>{t("STUDY ROOM / YOUR SHARED COPY")}</span>
+                  <span>
+                    {doc.chunks.length} {t("passages")}
+                  </span>
                 </div>
               </>
             ) : (
               <div className="empty" style={{ paddingTop: 80 }}>
                 <BookOpen size={60} />
-                <h2>Start with a page.</h2>
+                <h2>{t("Add your first material")}</h2>
                 <p style={{ lineHeight: 1.8, maxWidth: 260 }}>
-                  Upload your course notes or paste a passage. Your shared
-                  reading space will take shape here.
+                  {t(
+                    "Upload your course notes or paste a passage. Your shared reading space will take shape here.",
+                  )}
                 </p>
                 {isHost && (
                   <button
@@ -748,28 +792,34 @@ export default function RoomClient({ id }: { id: string }) {
                     onClick={() => setModal("upload")}
                   >
                     <Plus size={15} />
-                    Bring your notes
+                    {t("Add study material")}
                   </button>
                 )}
               </div>
             )}
           </article>
         </section>
-        <section className="chat-panel">
-          <div className="tabs">
+        <section
+          className="chat-panel"
+          id="workspace-discussion"
+          aria-label={t("Discussion and quizzes")}
+        >
+          <div className="tabs" role="group" aria-label={t("Discussion mode")}>
             <button
               className={mode === "qa" ? "active" : ""}
+              aria-pressed={mode === "qa"}
               onClick={() => setMode("qa")}
             >
               <MessageCircle size={15} />
-              Study Q&A
+              {t("Study Q&A")}
             </button>
             <button
               className={mode === "quiz" ? "active" : ""}
+              aria-pressed={mode === "quiz"}
               onClick={() => setMode("quiz")}
             >
               <ChartNoAxesCombined size={15} />
-              Confidence quiz
+              {t("Confidence quiz")}
             </button>
           </div>
           {mode === "qa" ? (
@@ -783,7 +833,7 @@ export default function RoomClient({ id }: { id: string }) {
                     el.scrollHeight - el.scrollTop - el.clientHeight < 80;
                 }}
               >
-                {!data && <RoomSkeleton label="Loading chat history" />}
+                {!data && <RoomSkeleton label={t("Loading chat history")} />}
                 {historyCursor && (
                   <button
                     className="secondary"
@@ -824,14 +874,14 @@ export default function RoomClient({ id }: { id: string }) {
                     }}
                   >
                     {historyBusy
-                      ? "Loading earlier messages…"
-                      : "Load earlier messages"}
+                      ? t("Loading earlier messages…")
+                      : t("Load earlier messages")}
                   </button>
                 )}
                 <p className="chat-intro">
-                  One conversation, shared by everyone.
+                  {t("One conversation, shared by everyone.")}
                   <br />
-                  Ask a question. We’ll find the passage together.
+                  {t("Ask a question. We’ll find the passage together.")}
                 </p>
                 {messages.length ? (
                   messages.map((m) => (
@@ -852,12 +902,12 @@ export default function RoomClient({ id }: { id: string }) {
                           <BookOpen size={17} className="accent" />
                         )}
                         {m.participantId
-                          ? m.displayName || "Study partner"
+                          ? m.displayName || t("Study partner")
                           : m.kind === "simplified"
-                            ? "Simplified re-explanation"
-                            : "Study companion"}
+                            ? t("Simplified re-explanation")
+                            : t("Study companion")}
                         {m.status === "streaming" && (
-                          <small>Thinking with you…</small>
+                          <small>{t("Thinking with you…")}</small>
                         )}
                       </div>
                       <div className="message-body">
@@ -875,8 +925,10 @@ export default function RoomClient({ id }: { id: string }) {
                                   const d = data?.documents.find((d) =>
                                     d.chunks.some((x) => x.id === c.id),
                                   );
-                                  if (d) setSelected(d.id);
-                                  else
+                                  if (d) {
+                                    setSelected(d.id);
+                                    setMobilePane("reading");
+                                  } else
                                     window.open(
                                       `/rooms/${id}/notes?chunk=${encodeURIComponent(c.id)}#chunk-${c.id}`,
                                       "_blank",
@@ -884,8 +936,8 @@ export default function RoomClient({ id }: { id: string }) {
                                     );
                                 }}
                               >
-                                [{i + 1}] {c.sectionLabel || "Passage"} ·{" "}
-                                {Math.round(c.similarity * 100)}%
+                                [{i + 1}] {c.filename} ·{" "}
+                                {c.sectionLabel || t("Passage")}
                               </button>
                             ))}
                           </div>
@@ -894,8 +946,9 @@ export default function RoomClient({ id }: { id: string }) {
                               className="notice"
                               style={{ fontSize: 11, marginTop: 10 }}
                             >
-                              Low confidence — consider rephrasing. The notes
-                              may not cover this question.
+                              {t(
+                                "Weak source match — consider rephrasing. The notes may not cover this question.",
+                              )}
                             </p>
                           )}
                         </>
@@ -916,10 +969,10 @@ export default function RoomClient({ id }: { id: string }) {
                           >
                             <Hand size={14} />
                             {clicked.current.has(m.id)
-                              ? "You raised your hand"
-                              : "I’m lost"}
+                              ? t("You raised your hand")
+                              : t("I’m lost")}
                             {m.lostCount
-                              ? ` · ${m.lostCount} ${m.lostCount === 1 ? "person is" : "people are"} lost`
+                              ? ` · ${t(m.lostCount === 1 ? "{count} person is lost" : "{count} people are lost", { count: m.lostCount })}`
                               : ""}
                           </button>
                         )}
@@ -928,10 +981,11 @@ export default function RoomClient({ id }: { id: string }) {
                 ) : (
                   <div className="empty">
                     <MessageCircle size={36} />
-                    <h3>What’s on your mind?</h3>
+                    <h3>{t("What’s on your mind?")}</h3>
                     <p style={{ fontSize: 12, lineHeight: 1.8 }}>
-                      Try “Explain the main idea” or ask about a specific
-                      passage.
+                      {t(
+                        "Try “Explain the main idea” or ask about a specific passage.",
+                      )}
                     </p>
                   </div>
                 )}
@@ -949,14 +1003,14 @@ export default function RoomClient({ id }: { id: string }) {
                   }}
                 >
                   <textarea
-                    aria-label="Ask a question"
+                    aria-label={t("Ask a question")}
                     name="question"
-                    placeholder="Let’s work through something…"
+                    placeholder={t("Ask about your course material…")}
                     maxLength={2000}
                     required
                   />
                   <button
-                    aria-label="Send question"
+                    aria-label={t("Send question")}
                     disabled={
                       !connected ||
                       busy ||
@@ -971,7 +1025,7 @@ export default function RoomClient({ id }: { id: string }) {
                   </button>
                 </form>
                 <small>
-                  Grounded in your notes. Always make room for a second look.
+                  {t("Answers use your notes. Check the cited passages.")}
                 </small>
               </div>
             </>
@@ -979,9 +1033,12 @@ export default function RoomClient({ id }: { id: string }) {
             <div className="quiz-box">
               {question ? (
                 <>
+                  <h2>{question.questionText}</h2>
                   <div className="row between">
-                    <span className="eyebrow">
-                      {reveal ? "The reveal" : "Trust your judgment"}
+                    <span className="meta-label">
+                      {reveal
+                        ? t("Round result")
+                        : t("Your probability forecast")}
                     </span>
                     <span className="clock">
                       <Clock
@@ -992,26 +1049,35 @@ export default function RoomClient({ id }: { id: string }) {
                     </span>
                   </div>
                   {question.styledAfterPastExam && (
-                    <span className="tag">Past-exam style · New question</span>
+                    <span className="tag">
+                      {t("Past-exam style · New question")}
+                    </span>
                   )}
-                  <h2>{question.questionText}</h2>
                   <p
                     className="muted"
-                    style={{ fontSize: 11, lineHeight: 1.7 }}
+                    style={{ fontSize: 13, lineHeight: 1.7 }}
                   >
-                    Spread 100% across the answers. Your honest confidence is
-                    your best strategy.
+                    {t(
+                      "Spread 100% across the answers. Your honest confidence is your best strategy.",
+                    )}
                   </p>
                   {question.options.map((option, i) => (
                     <div
                       className={`quiz-option ${reveal?.correctOptionIndex === i ? "correct" : ""}`}
                       key={i}
                     >
+                      {reveal?.correctOptionIndex === i && (
+                        <p className="correct-answer-label">
+                          {t("Correct answer")}
+                        </p>
+                      )}
                       <label>
                         <span className="accent">{"ABCD"[i]}.</span>
                         {option}
                         <input
-                          aria-label={`Option ${"ABCD"[i]} probability`}
+                          aria-label={t("Option {option} probability", {
+                            option: "ABCD"[i],
+                          })}
                           type="number"
                           min={0}
                           max={100}
@@ -1039,7 +1105,9 @@ export default function RoomClient({ id }: { id: string }) {
                         %
                       </label>
                       <input
-                        aria-label={`Option ${"ABCD"[i]} slider`}
+                        aria-label={t("Option {option} slider", {
+                          option: "ABCD"[i],
+                        })}
                         type="range"
                         min={0}
                         max={100}
@@ -1060,15 +1128,19 @@ export default function RoomClient({ id }: { id: string }) {
                   {!reveal && (
                     <>
                       <div className="row between" style={{ margin: "18px 0" }}>
-                        <small className={sum === 100 ? "" : "accent"}>
-                          Total: {sum}% / 100%
+                        <small
+                          className={sum === 100 ? "" : "error-text"}
+                          aria-live="polite"
+                        >
+                          {t("Total:")} {sum}
+                          {t("% of 100%")}
                         </small>
                         <small>
                           {submitted
-                            ? "Locked in. Waiting for everyone."
+                            ? t("Locked in. Waiting for everyone.")
                             : !eligible
-                              ? "Join the next round."
-                              : "Private until the reveal."}
+                              ? t("Join the next round.")
+                              : t("Private until the reveal.")}
                         </small>
                       </div>
                       <button
@@ -1092,14 +1164,16 @@ export default function RoomClient({ id }: { id: string }) {
                       >
                         <Check size={16} />
                         {submitted
-                          ? "Probabilities submitted"
-                          : "Lock in my confidence"}
+                          ? t("Probabilities submitted")
+                          : t("Lock in my confidence")}
                       </button>
                     </>
                   )}
                   {reveal && (
                     <section className="reveal">
-                      <h3 style={{ marginTop: 25 }}>The moment of truth.</h3>
+                      <h3 style={{ marginTop: 25 }}>
+                        {t("Correct answer and explanation")}
+                      </h3>
                       <p
                         style={{ fontSize: 12, lineHeight: 1.8, marginTop: 12 }}
                       >
@@ -1144,9 +1218,8 @@ export default function RoomClient({ id }: { id: string }) {
                           }}
                         >
                           {busy
-                            ? "Writing a new question…"
-                            : "One more question"}
-                          <ArrowUpRight size={15} />
+                            ? t("Writing a new question…")
+                            : t("One more question")}
                         </button>
                       )}
                     </section>
@@ -1155,15 +1228,16 @@ export default function RoomClient({ id }: { id: string }) {
               ) : (
                 <div className="empty" style={{ padding: "30px 5px" }}>
                   <ChartNoAxesCombined size={44} />
-                  <h2>A little less guessing.</h2>
+                  <h2>{t("Check your confidence")}</h2>
                   <p style={{ fontSize: 13, lineHeight: 1.8 }}>
-                    How sure are you, really? Assign a probability to each
-                    answer. Everyone has 20 seconds, and the truth comes out
-                    together.
+                    {t(
+                      "How sure are you, really? Assign a probability to each answer. Everyone has 20 seconds, and the truth comes out together.",
+                    )}
                   </p>
-                  <p style={{ fontSize: 11, lineHeight: 1.8 }}>
-                    Higher log scores win. A confident mistake costs more than
-                    honest uncertainty. Zero on the correct answer scores −∞.
+                  <p style={{ fontSize: 13, lineHeight: 1.8 }}>
+                    {t(
+                      "Higher log scores win. A confident mistake costs more than honest uncertainty. Zero on the correct answer scores −∞.",
+                    )}
                   </p>
                   {isHost ? (
                     <button
@@ -1180,20 +1254,21 @@ export default function RoomClient({ id }: { id: string }) {
                         emit("quiz-question-start", {}, () => setBusy(false));
                       }}
                     >
-                      {busy ? "Writing your first question…" : "Start a round"}
-                      <ArrowUpRight size={15} />
+                      {busy
+                        ? t("Writing your first question…")
+                        : t("Start a round")}
                     </button>
                   ) : (
-                    <small>Your host will start the next round.</small>
+                    <small>{t("Your host will start the next round.")}</small>
                   )}
                 </div>
               )}
-              {!connected && <RoomSkeleton label="Loading quiz leaderboard" />}
+              {!connected && (
+                <RoomSkeleton label={t("Loading quiz leaderboard")} />
+              )}
               {leaders.length > 0 && (
                 <section style={{ marginTop: 30 }}>
-                  <span className="eyebrow">
-                    Around the table / Leaderboard
-                  </span>
+                  <span className="meta-label">{t("Session leaderboard")}</span>
                   {leaders.map((l, i) => (
                     <div
                       className="score-row row between"
@@ -1204,7 +1279,9 @@ export default function RoomClient({ id }: { id: string }) {
                       </span>
                       <span>
                         {l.zeroProbability ? "−∞" : l.score.toFixed(3)}{" "}
-                        <small>/{l.rounds} rounds</small>
+                        <small>
+                          /{l.rounds} {t("rounds")}
+                        </small>
                       </span>
                     </div>
                   ))}
@@ -1218,10 +1295,10 @@ export default function RoomClient({ id }: { id: string }) {
         <Dialog
           title={
             modal === "upload"
-              ? "Add study material"
+              ? t("Add study material")
               : modal === "focus"
-                ? "Set study focus"
-                : "End this session?"
+                ? t("Set study focus")
+                : t("End this session?")
           }
           onClose={() => setModal(null)}
           busy={busy}
@@ -1229,46 +1306,58 @@ export default function RoomClient({ id }: { id: string }) {
           {modal === "upload" ? (
             <form onSubmit={upload}>
               <label>
-                Material type
+                {t("Material type")}
                 <select name="sourceType">
-                  <option value="COURSE_MATERIAL">Course material</option>
+                  <option value="COURSE_MATERIAL">
+                    {t("Course material")}
+                  </option>
                   <option value="PAST_EXAM">
-                    Past exam — style reference only
+                    {t("Past exam — style reference only")}
                   </option>
                 </select>
               </label>
               <label>
-                Upload a PDF (up to 4 MB)
+                {t("Upload a PDF (up to 4 MB)")}
                 <input type="file" name="file" accept="application/pdf" />
               </label>
-              <span className="eyebrow">Or paste your notes</span>
+              <span className="meta-label">{t("Or add text")}</span>
               <label>
-                Document title
-                <input name="filename" placeholder="Chapter 3 — Cell biology" />
+                {t("Document title")}
+                <input
+                  name="filename"
+                  placeholder={t("Chapter 3 — Cell biology")}
+                />
               </label>
               <label>
-                Text
+                {t("Text")}
                 <textarea
                   name="text"
                   rows={6}
                   maxLength={180000}
-                  placeholder="Paste the chapter or passage here…"
+                  placeholder={t("Paste the chapter or passage here…")}
                 />
               </label>
               <small>
-                Scanned PDFs need selectable text. Your documents are visible to
-                room participants.
+                {t(
+                  "Scanned PDFs need selectable text. Your documents are visible to room participants.",
+                )}
               </small>
-              {error && <p className="error">{error}</p>}
+              {error && (
+                <p className="error" role="alert">
+                  {t(error)}
+                </p>
+              )}
               <button disabled={busy} aria-busy={busy}>
-                {busy ? "Reading and indexing your notes…" : "Add to the table"}
+                {busy
+                  ? t("Reading and indexing your notes…")
+                  : t("Add material")}
                 <Plus size={16} />
               </button>
             </form>
           ) : modal === "focus" ? (
             <form onSubmit={focus}>
               <label>
-                Study focus
+                {t("Study focus")}
                 <textarea
                   name="studyFocus"
                   defaultValue={data?.room.studyFocusRaw}
@@ -1277,20 +1366,20 @@ export default function RoomClient({ id }: { id: string }) {
                 />
               </label>
               <small>
-                Try “Focus on chapter 3, skip chapter 5, and use everyday
-                examples.”
+                {t(
+                  "Try “Focus on chapter 3, skip chapter 5, and use everyday examples.”",
+                )}
               </small>
               <button disabled={busy} aria-busy={busy}>
-                {busy ? "Setting the direction…" : "Save our focus"}
+                {busy ? t("Setting the direction…") : t("Save focus")}
               </button>
             </form>
           ) : (
             <div className="stack">
               <p style={{ lineHeight: 1.8 }}>
-                Ending is final. Your notes stay saved, but this session cannot
-                be reopened. We’ll gather what clicked, the passages worth
-                another look, and a few next steps. Everyone will move to the
-                shared rundown.
+                {t(
+                  "Ending is final. Your notes stay saved, but this session cannot be reopened. We’ll gather what clicked, the passages worth another look, and a few next steps. Everyone will move to the shared rundown.",
+                )}
               </p>
               <button
                 disabled={
@@ -1301,14 +1390,15 @@ export default function RoomClient({ id }: { id: string }) {
                   emit("end-session");
                 }}
               >
-                End session & create rundown
-                <ArrowUpRight size={16} />
+                {t("End session & create rundown")}
               </button>
               <button className="secondary" onClick={() => setModal(null)}>
-                Keep studying
+                {t("Keep studying")}
               </button>
               <small>
-                Finish any active answer or quiz round before wrapping up.
+                {t(
+                  "Finish any active answer or quiz round before wrapping up.",
+                )}
               </small>
             </div>
           )}

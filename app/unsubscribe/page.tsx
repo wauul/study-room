@@ -1,8 +1,11 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useState } from "react";
 import Header from "@/components/Header";
 import Dialog from "@/components/Dialog";
 export default function Unsubscribe() {
+  const { t, locale } = useLanguage();
   const [confirm, setConfirm] = useState(false),
     [done, setDone] = useState(false),
     [busy, setBusy] = useState(false),
@@ -11,36 +14,42 @@ export default function Unsubscribe() {
     <>
       <Header />
       <main id="main-content" tabIndex={-1} className="shell article-page">
-        <h1>{done ? "You’re unsubscribed." : "A quieter inbox?"}</h1>
+        <h1>
+          {done ? t("You’re unsubscribed") : t("Unsubscribe from newsletters")}
+        </h1>
         <p className="page-lead">
           {done
-            ? "You won’t receive future newsletters from this subscription."
-            : "You can stop Study Room newsletter emails here. Your account and study rooms will stay available."}
+            ? t("You won’t receive future newsletters from this subscription.")
+            : t(
+                "You can stop Study Room newsletter emails here. Your account and study rooms will stay available.",
+              )}
         </p>
         {!done && (
           <button onClick={() => setConfirm(true)}>
-            Unsubscribe from newsletters
+            {t("Unsubscribe from newsletters")}
           </button>
         )}
         {error && (
           <p role="alert" className="error">
-            {error}
+            {t(error)}
           </p>
         )}
         {confirm && (
           <Dialog
-            title="Unsubscribe from newsletters?"
+            title={t("Unsubscribe from newsletters?")}
             onClose={() => setConfirm(false)}
             busy={busy}
           >
-            <p>You will stop receiving study tips and product updates.</p>
+            <p>
+              {t("You will stop receiving study tips and product updates.")}
+            </p>
             <div className="row">
               <button
                 className="secondary"
                 disabled={busy}
                 onClick={() => setConfirm(false)}
               >
-                Keep my subscription
+                {t("Keep my subscription")}
               </button>
               <button
                 disabled={busy}
@@ -70,7 +79,7 @@ export default function Unsubscribe() {
                   }
                 }}
               >
-                {busy ? "Saving…" : "Yes, unsubscribe"}
+                {busy ? t("Saving…") : t("Yes, unsubscribe")}
               </button>
             </div>
           </Dialog>

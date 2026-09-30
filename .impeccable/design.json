@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-30T14:33:37Z",
+  "title": "Design System: Study Room",
+  "extensions": {
+    "colorMeta": {
+      "light-accent": {
+        "role": "primary",
+        "displayName": "Annotation violet"
+      },
+      "dark-accent": {
+        "role": "primary",
+        "displayName": "Annotation violet, dark mode"
+      },
+      "light-background": {
+        "role": "neutral",
+        "displayName": "Slate canvas"
+      },
+      "dark-background": {
+        "role": "neutral",
+        "displayName": "Slate canvas, dark mode"
+      },
+      "light-highlight": {
+        "role": "neutral",
+        "displayName": "Marked evidence"
+      },
+      "dark-highlight": {
+        "role": "neutral",
+        "displayName": "Marked evidence, dark mode"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Anonymous home proposition; responsive overrides are documented in DESIGN.md."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page heading."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section heading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default prose and controls; passage leading is context-specific."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form label."
+      },
+      "citation": {
+        "displayName": "Citation",
+        "purpose": "Passage identifiers; the mono family also supports confidence and scores."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay-light",
+        "value": "0 16px 48px rgb(36 29 74 / 0.12)",
+        "purpose": "Shared --shadow in light mode: dialogs, mobile navigation, cookie notice."
+      },
+      {
+        "name": "overlay-dark",
+        "value": "0 16px 48px rgb(6 8 22 / 0.3)",
+        "purpose": "Shared --shadow in dark mode."
+      },
+      {
+        "name": "support",
+        "value": "0 4px 14px rgb(15 40 28 / 0.08)",
+        "purpose": "Existing support action shadow."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "0.18s ease",
+        "purpose": "Background, color, border-color, transform state transitions."
+      },
+      {
+        "name": "spinner",
+        "value": "spin 0.8s linear infinite",
+        "purpose": "Pending request indicator."
+      },
+      {
+        "name": "skeleton",
+        "value": "breathe 1.5s ease-in-out infinite alternate",
+        "purpose": "Loading placeholder; opacity reaches 0.5."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "Animation/transition duration; one animation iteration and scroll-behavior:auto. Client scroll handlers use instant."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-desktop",
+        "value": "1200px"
+      },
+      {
+        "name": "mobile-navigation",
+        "value": "1100px"
+      },
+      {
+        "name": "task-panes",
+        "value": "1000px"
+      },
+      {
+        "name": "mobile-layout",
+        "value": "800px"
+      },
+      {
+        "name": "narrow-mobile",
+        "value": "420px"
+      }
+    ],
+    "focus": {
+      "outline": "2px solid var(--focus-ring)",
+      "offset": "4px",
+      "fieldOffset": "2px"
+    },
+    "backdrop": {
+      "value": "rgb(10 30 22 / 0.65)",
+      "purpose": "Native dialog backdrop in both modes."
+    },
+    "semanticBindings": {
+      "colorPattern": "<mode>-<role> in DESIGN.md maps to --<role> in app/globals.css.",
+      "themeAttribute": "data-theme",
+      "themeValues": [
+        "light",
+        "dark"
+      ],
+      "preferenceValues": [
+        "light",
+        "dark"
+      ],
+      "storageKey": "study-theme",
+      "accentRgb": {
+        "light": "98, 80, 200",
+        "dark": "184, 165, 255"
+      },
+      "heatMaximumOpacity": 0.22,
+      "systemBootstrap": "No stored study-theme override: pre-hydration OS preference, then OS-change tracking until explicit light/dark selection."
+    },
+    "snippetScope": "Static visual primitives extracted from source CSS. Native interactions need the real components. CSS variables inherit through shadow DOM; literal fallbacks reproduce light defaults. IBM Plex Sans inherits from the host next/font stack; standalone snippets fall back to Arial. No synthesized tonal ramp is a production token.",
+    "localePersistence": {
+      "cookie": "study-locale",
+      "values": [
+        "en",
+        "fr"
+      ],
+      "maxAgeSeconds": 31536000,
+      "serverResolution": "Valid cookie, then highest-priority supported Accept-Language entry, then en",
+      "selection": "Update document lang and client context, then router.refresh()"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main task action with disabled and keyboard states.",
+      "html": "<button class=\"ds-button ds-primary\">Create a room</button>",
+      "css": ".ds-button{display:inline-flex;justify-content:center;align-items:center;gap:9px;min-height:44px;padding:11px 19px;border:1px solid transparent;border-radius:var(--radius,5px);font:600 .9rem/1.3 var(--sans,Arial,sans-serif);cursor:pointer;text-align:center;transition:background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}.ds-button:active{transform:translateY(1px)}.ds-button:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}.ds-button:disabled{opacity:.55;cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-button{transition-duration:.01ms}}.ds-primary{background:var(--accent,#6250c8);color:var(--on-accent,#fff)}.ds-primary:hover{background:var(--accent-hover,#4e3bab);color:var(--on-accent,#fff)}"
+    },
+    {
+      "name": "Secondary button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternative task action with a strong boundary.",
+      "html": "<button class=\"ds-button ds-secondary\">Read saved notes</button>",
+      "css": ".ds-button{display:inline-flex;justify-content:center;align-items:center;gap:9px;min-height:44px;padding:11px 19px;border:1px solid transparent;border-radius:var(--radius,5px);font:600 .9rem/1.3 var(--sans,Arial,sans-serif);cursor:pointer;text-align:center;transition:background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}.ds-button:active{transform:translateY(1px)}.ds-button:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}.ds-button:disabled{opacity:.55;cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-button{transition-duration:.01ms}}.ds-secondary{background:var(--surface,#fff);border-color:var(--line-strong,#858da2);color:var(--text,#202538)}.ds-secondary:hover{background:var(--accent-soft,#ecebf7);color:var(--accent,#6250c8);border-color:var(--accent,#6250c8)}"
+    },
+    {
+      "name": "Quiet button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Contextual supporting action.",
+      "html": "<button class=\"ds-button ds-quiet\">Explain it more simply</button>",
+      "css": ".ds-button{display:inline-flex;justify-content:center;align-items:center;gap:9px;min-height:44px;padding:11px 19px;border:1px solid transparent;border-radius:var(--radius,5px);font:600 .9rem/1.3 var(--sans,Arial,sans-serif);cursor:pointer;text-align:center;transition:background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}.ds-button:active{transform:translateY(1px)}.ds-button:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}.ds-button:disabled{opacity:.55;cursor:not-allowed;transform:none}@media(prefers-reduced-motion:reduce){.ds-button{transition-duration:.01ms}}.ds-quiet{background:transparent;color:var(--accent,#6250c8);padding-inline:10px}.ds-quiet:hover{background:var(--accent-soft,#ecebf7);color:var(--accent,#6250c8)}"
+    },
+    {
+      "name": "Text field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Visible label and native input with hover, focus, disabled and invalid states.",
+      "html": "<label class=\"ds-field\">Room name<input class=\"ds-input\" placeholder=\"Biology revision\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:7px;font:500 .9rem var(--sans,Arial,sans-serif);color:var(--text,#202538)}.ds-input{width:100%;min-width:0;min-height:46px;padding:12px 13px;border:1px solid var(--line-strong,#858da2);border-radius:var(--radius,5px);background:var(--surface,#fff);color:var(--text,#202538);caret-color:var(--accent,#6250c8);font:400 16px/1.6 var(--sans,Arial,sans-serif)}.ds-input:hover{border-color:var(--accent,#6250c8)}.ds-input:focus{border-color:var(--accent,#6250c8);outline:2px solid var(--focus-ring,#6250c8);outline-offset:2px}.ds-input::placeholder{color:var(--muted,#626a7d);opacity:1}.ds-input:disabled{background:var(--surface-muted,#ecebf7);color:var(--muted,#626a7d);cursor:not-allowed}.ds-input[aria-invalid=true]{border-color:var(--error,#a32e34)}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Active location marked by text color and a fine rule.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main navigation\"><a href=\"#rooms\" aria-current=\"page\">My rooms</a><a href=\"#journal\">Study journal</a><a href=\"#help\">Help</a></nav>",
+      "css": ".ds-nav{display:flex;gap:25px;font:400 .88rem/1.6 var(--sans,Arial,sans-serif)}.ds-nav a{padding:10px 0;color:var(--muted,#626a7d);text-decoration:none;border-bottom:1px solid transparent}.ds-nav a:hover,.ds-nav a[aria-current=page]{color:var(--accent,#6250c8)}.ds-nav a[aria-current=page]{border-bottom-color:var(--accent,#6250c8)}.ds-nav a:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}"
+    },
+    {
+      "name": "Status tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Supplementary state label; non-interactive.",
+      "html": "<span class=\"ds-tag\">Ended</span> <span class=\"ds-tag ds-live\">Live</span>",
+      "css": ".ds-tag{display:inline-flex;gap:8px;align-items:center;font:400 .78rem/1.6 var(--sans,Arial,sans-serif);color:var(--muted,#626a7d);background:var(--surface-muted,#ecebf7);padding:5px 9px;border-radius:2px}.ds-live{color:var(--success,#206344);background:var(--success-soft,#e5f1e8)}"
+    },
+    {
+      "name": "Ruled room row",
+      "kind": "card",
+      "refersTo": "room-row",
+      "description": "A content row defined by a divider and useful metadata.",
+      "html": "<a class=\"ds-room\" href=\"#room\"><h2>Biology revision</h2><p>Course notes and a shared discussion.</p><span>Open room</span></a>",
+      "css": ".ds-room{padding:28px 0;border-top:1px solid var(--line,#dfe2ed);display:flex;flex-direction:column;align-items:flex-start;gap:16px;min-width:0;font:400 16px/1.6 var(--sans,Arial,sans-serif);color:var(--text,#202538);text-decoration:none}.ds-room h2{margin:0;font-size:1.45rem;font-weight:600;line-height:1.18;letter-spacing:-.025em;overflow-wrap:anywhere}.ds-room p{margin:0;color:var(--muted,#626a7d);max-width:50ch}.ds-room span{font-size:.9rem;text-decoration:underline;color:var(--accent,#6250c8);margin-top:auto}.ds-room:hover h2{color:var(--accent,#6250c8)}.ds-room:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}"
+    },
+    {
+      "name": "Citation action",
+      "kind": "custom",
+      "refersTo": "citation",
+      "description": "Contextual passage navigation with an explicit source label.",
+      "html": "<button class=\"ds-citation\">[1] Biology notes / Cell membranes</button>",
+      "css": ".ds-citation{display:inline-flex;justify-content:flex-start;text-align:left;font:400 .8rem/1.3 var(--sans,Arial,sans-serif);background:transparent;color:var(--accent,#6250c8);border:1px solid var(--line-strong,#858da2);border-radius:2px;padding:8px;min-height:44px;overflow-wrap:anywhere;cursor:pointer;transition:background .18s ease,color .18s ease,border-color .18s ease,transform .18s ease}.ds-citation:hover{background:var(--accent-soft,#ecebf7);color:var(--accent,#6250c8)}.ds-citation:active{transform:translateY(1px)}.ds-citation:focus-visible{outline:2px solid var(--focus-ring,#6250c8);outline-offset:4px}@media(prefers-reduced-motion:reduce){.ds-citation{transition-duration:.01ms}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Study notation",
+    "overview": "Study Room makes evidence and uncertainty legible through cited passages, annotation brackets, ruled reading surfaces, and square confidence measures. The user-pinned violet/slate identity anchors a calm, practical interface with IBM Plex Sans, low-radius controls, and room for long prose.\n\nReading and conversation determine density. Public pages use generous margins; workspaces use compact controls around readable source material. Specific labels and meaningful state messages carry the interface. Instructional compositions identify themselves as examples.",
+    "keyCharacteristics": [
+      "Violet annotations on slate and white reading surfaces.",
+      "Fine rules, bracket marks, and contextual passage links.",
+      "Sans typography with measured numeric and citation details.",
+      "Shared findings and personal confidence records remain visibly distinct."
+    ],
+    "rules": [
+      {
+        "name": "The Evidence Rule",
+        "body": "Highlighting identifies a passage or measured activity; it must keep its source label and readable text.",
+        "section": "colors"
+      },
+      {
+        "name": "The Heading Rule",
+        "body": "Lead with the meaningful room, article, question, or page heading; place supporting category and provenance metadata after it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Reflow Rule",
+        "body": "Long sources, names, citations, and actions must wrap inside their pane; changing viewport or text size must not hide the task or cover form fields.",
+        "section": "layout"
+      }
+    ],
+    "dos": [
+      "**Do** use same-mode semantic colors for every surface, state, and control.",
+      "**Do** preserve readable cited passages, meaningful headings, and explicit confidence labels.",
+      "**Do** retain focus outlines, native controls, and task-pane reflow at small widths and enlarged text.",
+      "**Do** distinguish shared findings from personal records and instructional examples from real activity."
+    ],
+    "donts": [
+      "**Don't** restore the superseded terracotta palette or serif heading identity.",
+      "**Don't** replace ruled content rows with decorative stacks of lifted feature cards.",
+      "**Don't** use a colored side stripe as the sole marker for a selected or correct answer.",
+      "**Don't** let floating support actions obscure fields or clip preference controls."
+    ]
+  }
+}

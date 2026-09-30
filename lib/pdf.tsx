@@ -9,21 +9,23 @@ import {
 } from "@react-pdf/renderer";
 import { db } from "./db";
 import { summarySchema } from "./summary";
+import { getLocale } from "./locale";
+import { translator } from "./i18n";
 const styles = StyleSheet.create({
   page: {
     padding: 42,
     fontFamily: "Helvetica",
     fontSize: 10,
-    color: "#292b25",
-    backgroundColor: "#fffdf7",
+    color: "#202538",
+    backgroundColor: "#fff",
   },
-  title: { fontFamily: "Times-Roman", fontSize: 30, marginBottom: 10 },
+  title: { fontFamily: "Helvetica-Bold", fontSize: 30, marginBottom: 10 },
   heading: {
-    fontFamily: "Times-Roman",
+    fontFamily: "Helvetica-Bold",
     fontSize: 18,
     marginTop: 20,
     marginBottom: 8,
-    color: "#ac482d",
+    color: "#6250c8",
   },
   text: { lineHeight: 1.6, marginBottom: 7 },
   foot: {
@@ -36,6 +38,7 @@ const styles = StyleSheet.create({
   },
 });
 export async function personalizedPdf(roomId: string, participantId: string) {
+  const t = translator(await getLocale());
   const room = await db.room.findUniqueOrThrow({
     where: { id: roomId },
     include: { summary: true },
@@ -55,9 +58,11 @@ export async function personalizedPdf(roomId: string, participantId: string) {
       <Page size="A4" style={styles.page}>
         <Text style={styles.title}>{room.name}</Text>
         <Text style={styles.text}>
-          SESSION RUNDOWN / Prepared for {participant.displayName}
+          {t("SESSION RUNDOWN / Prepared for {name}", {
+            name: participant.displayName,
+          })}
         </Text>
-        <Text style={styles.heading}>What clicked</Text>
+        <Text style={styles.heading}>{t("What clicked")}</Text>
         {result.wellUnderstood.length ? (
           result.wellUnderstood.map((x, i) => (
             <View key={i}>
@@ -66,26 +71,28 @@ export async function personalizedPdf(roomId: string, participantId: string) {
             </View>
           ))
         ) : (
-          <Text style={styles.text}>Not enough evidence of mastery yet.</Text>
+          <Text style={styles.text}>
+            {t("Not enough evidence of mastery yet.")}
+          </Text>
         )}
-        <Text style={styles.heading}>Worth another look</Text>
+        <Text style={styles.heading}>{t("Worth another look")}</Text>
         {result.strugglePoints.map((x, i) => (
           <View key={i}>
             <Text>
-              {x.topic} / {x.severity}
+              {x.topic} / {t(x.severity)}
             </Text>
             <Text style={styles.text}>{x.evidence}</Text>
             {x.explanation && <Text style={styles.text}>{x.explanation}</Text>}
           </View>
         ))}
-        <Text style={styles.heading}>Your next study session</Text>
+        <Text style={styles.heading}>{t("Your next study session")}</Text>
         {result.studyTips.map((t, i) => (
           <Text key={i} style={styles.text}>
             {i + 1}. {t}
           </Text>
         ))}
         <Text style={styles.text}>{result.suggestedNextSteps}</Text>
-        <Text style={styles.heading}>Your confidence record</Text>
+        <Text style={styles.heading}>{t("Your confidence record")}</Text>
         {participant.quizResults.length ? (
           participant.quizResults.map((r, i) => (
             <View key={r.id}>
@@ -93,20 +100,23 @@ export async function personalizedPdf(roomId: string, participantId: string) {
                 {i + 1}. {r.quizQuestion.questionText}
               </Text>
               <Text style={styles.text}>
-                Probabilities:{" "}
-                {(r.submittedDistribution as number[]).join("% / ")}% — Log
-                score: {r.zeroProbability ? "-Infinity" : r.score.toFixed(3)}
+                {t("Probabilities:")}{" "}
+                {(r.submittedDistribution as number[]).join("% / ")}% —{" "}
+                {t("Log score:")}{" "}
+                {r.zeroProbability ? "-Infinity" : r.score.toFixed(3)}
               </Text>
             </View>
           ))
         ) : (
-          <Text style={styles.text}>No quiz submissions in this session.</Text>
+          <Text style={styles.text}>
+            {t("No quiz submissions in this session.")}
+          </Text>
         )}
         <Text
           style={styles.foot}
           fixed
           render={({ pageNumber, totalPages }) =>
-            `Study Room · A little clearer, together.                                            ${pageNumber} / ${totalPages}`
+            `Study Room · ${t("A little clearer, together.")}                          ${pageNumber} / ${totalPages}`
           }
         />
       </Page>

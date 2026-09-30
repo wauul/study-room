@@ -1,12 +1,15 @@
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { oauthProviders } from "./oauth";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { db } from "./db";
 import { getServerSession } from "next-auth";
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
+  adapter: PrismaAdapter(db),
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
-  pages: { signIn: "/login" },
+  pages: { signIn: "/login", error: "/login" },
   providers: [
     Credentials({
       name: "Email and password",
@@ -26,6 +29,7 @@ export const authOptions: NextAuthOptions = {
         });
         if (
           !user ||
+          !user.hashedPassword ||
           !(await compare(credentials.password, user.hashedPassword))
         )
           return null;
@@ -36,8 +40,14 @@ export const authOptions: NextAuthOptions = {
         };
       },
     }),
+    ...oauthProviders(process.env),
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (user.email) user.email = user.email.trim().toLowerCase();
+      // The app requires an email for membership and personal reports.
+      return account?.type !== "oauth" || !!user.email;
+    },
     async jwt({ token, user }) {
       if (user) token.sub = user.id;
       return token;

@@ -1,3 +1,5 @@
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
@@ -10,6 +12,8 @@ export default async function Notes({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ before?: string; message?: string; chunk?: string }>;
 }) {
+  const locale = await getLocale();
+  const t = translator(locale);
   const { id } = await params;
   const query = await searchParams;
   let access;
@@ -73,17 +77,15 @@ export default async function Notes({
             "/rooms/" + id + (access.room.status === "ENDED" ? "/summary" : "")
           }
         >
-          ← Back to session
+          {t("← Back to session")}
         </Link>
-        <p className="eyebrow" style={{ marginTop: 30 }}>
-          Your room library
-        </p>
         <h1>{access.room.name}</h1>
+        <p className="page-lead">{t("Saved notes and discussion")}</p>
         {documents.map((d) => (
           <article key={d.id}>
             <h2>{d.filename}</h2>
             <p className="post-date">
-              Added{" "}
+              {t("Added")}{" "}
               <time dateTime={d.createdAt.toISOString()}>
                 {d.createdAt.toISOString().slice(0, 10)}
               </time>
@@ -95,10 +97,12 @@ export default async function Notes({
                 className="library-passage"
               >
                 <div>
-                  <h3>{c.sectionLabel || "Passage"}</h3>
+                  <h3>{c.sectionLabel || t("Passage")}</h3>
                   {!c.active && (
                     <p className="muted">
-                      Archived passage — retained for the original citation.
+                      {t(
+                        "Archived passage — retained for the original citation.",
+                      )}
                     </p>
                   )}
                   <p style={{ whiteSpace: "pre-wrap" }}>{c.content}</p>
@@ -107,10 +111,18 @@ export default async function Notes({
             ))}
           </article>
         ))}
-        <h2>Discussion archive</h2>
+        {!documents.length && (
+          <p className="notice">{t("No material was added to this room.")}</p>
+        )}
+        <h2>{t("Discussion archive")}</h2>
+        {!messages.length && (
+          <p className="muted">
+            {t("No completed discussion messages in this view.")}
+          </p>
+        )}
         {(query.before || query.message) && (
           <Link className="text-link" href={`/rooms/${id}/notes`}>
-            Latest messages
+            {t("Latest messages")}
           </Link>
         )}
         {messages.map((m) => (
@@ -119,20 +131,20 @@ export default async function Notes({
             id={"message-" + m.id}
             key={m.id}
           >
-            <span className="eyebrow">{m.kind}</span>
+            <span className="meta-label">{m.kind}</span>
             <time className="post-date" dateTime={m.createdAt.toISOString()}>
-              Posted {m.createdAt.toISOString().slice(0, 16).replace("T", " ")}{" "}
-              UTC
+              {t("Posted")}{" "}
+              {m.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC
             </time>
             <p style={{ whiteSpace: "pre-wrap", marginTop: 20 }}>{m.content}</p>
           </article>
         ))}
         {rows.length > 50 && (
           <Link
-            className="secondary"
+            className="button secondary"
             href={`/rooms/${id}/notes?before=${messages[0].id}`}
           >
-            Earlier messages
+            {t("Earlier messages")}
           </Link>
         )}
       </main>

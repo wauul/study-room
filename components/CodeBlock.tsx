@@ -1,7 +1,10 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useRef, useState } from "react";
 import { Copy, Check } from "lucide-react";
 export default function CodeBlock({ children }: { children: React.ReactNode }) {
+  const { t } = useLanguage();
   const ref = useRef<HTMLPreElement>(null);
   const [state, setState] = useState("");
   return (
@@ -17,14 +20,14 @@ export default function CodeBlock({ children }: { children: React.ReactNode }) {
             setState("Copy failed — select the code manually");
           }
         }}
-        aria-label="Copy code"
+        aria-label={t("Copy code")}
       >
         {state === "Copied" ? <Check size={14} /> : <Copy size={14} />}{" "}
-        {state === "Copied" ? "Copied" : "Copy code"}
+        {state === "Copied" ? t("Copied") : t("Copy code")}
       </button>
       <pre ref={ref}>{children}</pre>
       <span className="sr-only" role="status">
-        {state}
+        {t(state)}
       </span>
     </div>
   );

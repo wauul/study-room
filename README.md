@@ -42,7 +42,7 @@ Next.js 15 replaces the originally requested 14 with user approval to use a main
 
 ## Use the app
 
-1. Create an email/password account, then a room. Accounts are required for both hosts and participants so room actions and personalized exports have verifiable ownership.
+1. Create an account with email/password or Google, Microsoft or GitHub, then a room. All three OAuth providers are configured on the live app and the local preview at port 3101; see [OAuth setup](docs/oauth-setup.md) for callbacks, the database migration and credential expiry. Accounts are required for both hosts and participants so room actions and personalized exports have verifiable ownership.
 2. Upload selectable-text PDFs (up to 4 MB) or paste text. Add past exams separately as style references. Invite friends using the room link.
 3. Ask a shared question, follow the cited passages, or start a confidence quiz as host.
 4. Assign percentages summing to 100. Submissions stay private until the server locks the round.
@@ -82,7 +82,7 @@ Unique “I'm lost” clicks count once per participant per answer. Three clicks
 
 ## Design
 
-The refreshed interface pairs a slate background and violet accents with serif headings, rounded cards, and restrained line icons. Light and dark palettes use centralized CSS variables. The header stays visible; mobile layouts provide a disclosure menu and stacked reading areas. Reduced-motion preferences disable animation. Print styles remove navigation and controls and render the material on white paper. The original palette exploration remains in `docs/design.md` as historical context.
+The Study notation interface uses IBM Plex Sans, the original violet/slate palette, cited passages, annotation brackets, fine rules, and low-radius controls. A sun/moon button switches between light and dark; the first visit follows the system preference and explicit choices persist on the device. A styled native English/Français selector remembers the language in an essential cookie. Server rendering uses that preference or the browser’s supported language. Interface text, guides, FAQ, public search and export labels are translated; user notes and generated study content retain their original language. The sticky header reflows on narrow screens; workspaces switch between Material, Read, and Discuss task panes below 1000px. Reduced-motion and print styles support comfortable reading. The current tokens and component rules are in [DESIGN.md](DESIGN.md), with coverage and verification limits in [docs/redesign-verification.md](docs/redesign-verification.md).
 
 ## Deploy on free tiers
 

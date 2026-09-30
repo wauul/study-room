@@ -1,8 +1,11 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useState } from "react";
 import Header from "@/components/Header";
-import { ArrowRight } from "lucide-react";
+
 export default function NewRoom() {
+  const { t, locale } = useLanguage();
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -32,51 +35,52 @@ export default function NewRoom() {
     <>
       <Header />
       <main id="main-content" tabIndex={-1} className="form-wrap">
-        <span className="eyebrow">A fresh page / 01</span>
-        <h1 style={{ marginTop: 15 }}>Make some study space.</h1>
+        <h1>{t("Create a study room")}</h1>
         <p className="muted">
-          Give your room a name. Bring the notes once you’re in, then invite
-          your people.
+          {t(
+            "Name your session, add your notes, and share the room link with your group.",
+          )}
         </p>
         <form onSubmit={submit}>
           <label>
-            Room name
+            {t("Room name")}
             <input
               name="name"
-              placeholder="e.g. The Friday biology table"
+              placeholder={t("e.g. Biology — chapter 3")}
               maxLength={100}
               minLength={2}
               required
             />
           </label>
           <label>
-            Your name at the table
+            {t("Your display name")}
             <input
               name="displayName"
-              placeholder="What should we call you?"
+              placeholder={t("Name shown to the group")}
               maxLength={50}
               required
             />
           </label>
           <label>
-            What are we focusing on? <span className="muted">Optional</span>
+            {t("Study focus")} <span className="muted">{t("Optional")}</span>
             <textarea
               name="studyFocus"
               maxLength={2000}
-              placeholder="Focus on chapter 3. Skip the historical background. Explain things with examples."
+              placeholder={t(
+                "Focus on chapter 3. Skip the historical background. Explain things with examples.",
+              )}
             />
           </label>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {t(error)}
             </p>
           )}
-          <button disabled={busy}>
-            {busy ? "Preparing your room…" : "Open the room"}
-            <ArrowRight size={16} />
+          <button disabled={busy} aria-busy={busy}>
+            {busy ? t("Preparing your room…") : t("Create room")}
           </button>
           <small>
-            Only people with your room link can join after signing in.
+            {t("Only people with your room link can join after signing in.")}
           </small>
         </form>
       </main>

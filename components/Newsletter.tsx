@@ -1,26 +1,30 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useState } from "react";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 export default function Newsletter() {
+  const { t } = useLanguage();
   const [state, setState] = useState(""),
     [error, setError] = useState("");
   return (
     <section className="newsletter" aria-labelledby="newsletter-heading">
       <div>
-        <span className="eyebrow">A note for your next session</span>
-        <h2 id="newsletter-heading">Stay curious.</h2>
+        <h2 id="newsletter-heading">{t("Notes for your next session")}</h2>
         <p>
-          Occasional study tips and product updates. A little encouragement for
-          your inbox.
+          {t(
+            "Occasional study tips and product updates. Unsubscribe whenever you like.",
+          )}
         </p>
       </div>
       {state === "success" ? (
         <div className="newsletter-success" role="status">
           <CheckCircle2 size={30} />
-          <h3>You’re on the list.</h3>
+          <h3>{t("Subscription saved")}</h3>
           <p>
-            Thanks for making room for us. You can unsubscribe from any future
-            newsletter.
+            {t(
+              "Your email is saved. You can unsubscribe from any future newsletter.",
+            )}
           </p>
         </div>
       ) : (
@@ -49,33 +53,32 @@ export default function Newsletter() {
             }
           }}
         >
-          <label htmlFor="newsletter-email">Email address</label>
+          <label htmlFor="newsletter-email">{t("Email address")}</label>
           <div className="newsletter-input">
             <input
               id="newsletter-email"
               name="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t("you@example.com")}
               autoComplete="email"
               maxLength={254}
               required
             />
             <button disabled={state === "busy"} aria-busy={state === "busy"}>
-              {state === "busy" ? "Joining…" : "Count me in"}
-              <ArrowRight size={16} />
+              {state === "busy" ? t("Subscribing…") : t("Subscribe")}
             </button>
           </div>
           <label className="check-label">
             <input name="consent" type="checkbox" required />
-            I’d like occasional Study Room emails.
+            {t("I’d like occasional Study Room emails.")}
           </label>
           <label className="honeypot" aria-hidden="true">
-            Website
+            {t("Website")}
             <input name="website" tabIndex={-1} autoComplete="off" />
           </label>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {t(error)}
             </p>
           )}
         </form>

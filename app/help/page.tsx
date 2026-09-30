@@ -1,20 +1,20 @@
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 import Header from "@/components/Header";
 import Newsletter from "@/components/Newsletter";
-import { faqs, trackedUrl } from "@/lib/content";
-export default function Help() {
+import { getFaqs, trackedUrl } from "@/lib/content";
+export default async function Help() {
+  const locale = await getLocale();
+  const t = translator(locale);
+  const faqs = getFaqs(locale);
   return (
     <>
       <Header />
       <main id="main-content" tabIndex={-1} className="shell">
         <div className="help-intro">
-          <span className="eyebrow">A little guidance</span>
-          <h1>
-            Good questions.
-            <br />
-            <em>Clear answers.</em>
-          </h1>
+          <h1>{t("Help with Study Room")}</h1>
           <p className="page-lead">
-            Everything you need to settle in and get studying.
+            {t("How rooms, source material, quizzes, and saved reports work.")}
           </p>
         </div>
         <div className="faq-list">
@@ -32,14 +32,14 @@ export default function Help() {
           ))}
         </div>
         <p className="help-contact">
-          Still have a question?{" "}
+          {t("Still have a question?")}{" "}
           <a
             className="text-link"
             href={trackedUrl("https://github.com/wauul/study-room/issues/new")}
             target="_blank"
             rel="noopener noreferrer"
           >
-            Contact the maintainer ↗
+            {t("Contact the maintainer ↗")}
           </a>
         </p>
         <Newsletter />

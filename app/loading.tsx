@@ -1,12 +1,16 @@
+"use client";
+
+import { useLanguage } from "@/components/LanguageProvider";
 import Header from "@/components/Header";
 export default function Loading() {
+  const { t, locale } = useLanguage();
   return (
     <>
       <Header />
       <main id="main-content" tabIndex={-1} className="shell" aria-busy="true">
         <p className="search-status" role="status">
           <span className="spinner" />
-          Making room for you…
+          {t("Making room for you…")}
         </p>
         <div className="skeleton skeleton-title" />
         <div className="skeleton skeleton-line" />

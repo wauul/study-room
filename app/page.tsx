@@ -1,21 +1,17 @@
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import Header from "@/components/Header";
 import Newsletter from "@/components/Newsletter";
-import {
-  ArrowUpRight,
-  Plus,
-  BookOpen,
-  MessageCircle,
-  ChartNoAxesCombined,
-  Users,
-  FileText,
-  ArrowRight,
-} from "lucide-react";
+import StudyMethod from "@/components/StudyMethod";
+import { Plus, Users, FileText } from "lucide-react";
 export const dynamic = "force-dynamic";
 export default async function Home() {
+  const locale = await getLocale();
+  const t = translator(locale);
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | undefined)?.id;
   let failed = false;
@@ -36,142 +32,162 @@ export default async function Home() {
   return (
     <>
       <Header />
-      <main id="main-content" tabIndex={-1} className="shell">
-        <div className="intro">
-          <div>
-            <div className="eyebrow">Make room for understanding</div>
-            <h1>
-              Good questions.
-              <br />
-              <em>Better together.</em>
-            </h1>
-            <p>
-              Your notes, your people, a fresh perspective.
-              <br />
-              Pull up a chair and work through the difficult bits.
-            </p>
-          </div>
-          <Link className="button" href={userId ? "/rooms/new" : "/login"}>
-            <Plus size={17} />
-            Create a study room
-          </Link>
-        </div>
-        <div className="section-rule">
-          <div className="row">
-            <span className="eyebrow">Your study spaces</span>
-            <span className="tag">
-              {rooms.length.toString().padStart(2, "0")}
-            </span>
-          </div>
-          <span className="muted" style={{ fontSize: 11 }}>
-            A shared table. A clearer head.
-          </span>
-        </div>
-        {failed && (
-          <div className="error">
-            We couldn’t load your rooms. Please refresh in a moment.
-          </div>
-        )}
-        {rooms.length ? (
-          <div className="room-grid">
-            {rooms.map((room, i) => (
-              <Link
-                href={`/rooms/${room.id}${room.status === "ENDED" ? "/summary" : ""}`}
-                key={room.id}
-                className="room-card"
-              >
-                <div>
-                  <div className="row between">
-                    <span className="eyebrow">
-                      Room {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <span className="tag">
-                      {room.status === "ACTIVE" ? (
-                        <>
-                          <span className="dot" />
-                          Open for study
-                        </>
-                      ) : (
-                        "Rundown ready"
-                      )}
-                    </span>
-                  </div>
-                  <h3>{room.name}</h3>
-                  <p>
-                    {room.studyFocusRaw ||
-                      "A little space to make sense of things."}
-                  </p>
-                </div>
-                <div className="row between" style={{ marginTop: 25 }}>
-                  <div className="row muted">
-                    <Users size={14} />
-                    <small>{room._count.participants}</small>
-                    <FileText size={14} />
-                    <small>{room._count.documents}</small>
-                  </div>
-                  <ArrowUpRight size={18} className="accent" />
-                </div>
-              </Link>
-            ))}
+      <main id="main-content" tabIndex={-1} className="shell home-page">
+        {userId ? (
+          <div className="page-heading row between">
+            <div>
+              <h1>{t("Your study rooms")}</h1>
+              <p>{t("Pick up a discussion or start with new material.")}</p>
+            </div>
+            <Link className="button" href="/rooms/new">
+              <Plus size={18} />
+              {t("Create a room")}
+            </Link>
           </div>
         ) : (
-          <div
-            className="room-card"
-            style={{ padding: "40px", minHeight: 230 }}
-          >
-            <div className="row" style={{ gap: 28, flexWrap: "wrap" }}>
-              <BookOpen size={65} className="accent" />
-              <div>
-                <h2>Your next lightbulb moment starts here.</h2>
-                <p style={{ marginTop: 12, maxWidth: 520, fontSize: 14 }}>
-                  Bring a chapter, a past paper, or that topic nobody quite
-                  gets. Add your friends, and turn “I’m lost” into “I’ve got
-                  it.”
-                </p>
+          <section className="home-hero">
+            <div className="hero-copy">
+              <h1>
+                {t("Your notes")}
+                <br />
+                {t("Your questions")}
+                <br />
+                <span>{t("A clearer next step")}</span>
+              </h1>
+              <p>
+                {t(
+                  "Bring your course material and your study group. Work through questions with cited answers, test your confidence, and decide what to revise next.",
+                )}
+              </p>
+              <div className="hero-actions">
+                <Link className="button" href="/login">
+                  {t("Start a study room")}
+                </Link>
                 <Link
-                  href={userId ? "/rooms/new" : "/login"}
-                  className="row accent"
-                  style={{ marginTop: 22, fontWeight: 600 }}
+                  className="text-link"
+                  href="/guides/start-a-study-session"
                 >
-                  {userId ? "Set up your first room" : "Sign in to get started"}
-                  <ArrowRight size={16} />
+                  {t("How a session works")}
                 </Link>
               </div>
+              <p className="hero-footnote">
+                {t("PDFs or pasted notes. Everyone joins with an account.")}
+              </p>
             </div>
-          </div>
+            <StudyMethod />
+          </section>
         )}
-        <div className="feature-strip">
-          <div>
-            <MessageCircle size={26} />
-            <section>
-              <h3>Ask. Discuss. Understand.</h3>
-              <p>
-                Answers grounded in your course notes, with the exact passages
-                beside them.
+        {userId && (
+          <section aria-label={t("Your rooms")}>
+            {failed && (
+              <p className="error" role="alert">
+                {t(
+                  "We couldn’t load your rooms. Refresh the page to try again.",
+                )}
               </p>
-            </section>
+            )}
+            {rooms.length ? (
+              <div className="room-grid">
+                {rooms.map((room) => (
+                  <Link
+                    className="room-card"
+                    key={room.id}
+                    href={`/rooms/${room.id}${room.status === "ENDED" ? "/summary" : ""}`}
+                  >
+                    <div className="room-status">
+                      <span
+                        className={`status-label ${room.status === "ACTIVE" ? "live" : ""}`}
+                      >
+                        {room.status === "ACTIVE"
+                          ? t("Open session")
+                          : t("Rundown ready")}
+                      </span>
+                    </div>
+                    <h2>{room.name}</h2>
+                    <p>
+                      {room.studyFocusRaw ||
+                        t("Shared notes, questions, and confidence quizzes.")}
+                    </p>
+                    <div className="room-meta">
+                      <span>
+                        <Users size={16} />
+                        {room._count.participants} {t("participants")}
+                      </span>
+                      <span>
+                        <FileText size={16} />
+                        {room._count.documents} {t("documents")}
+                      </span>
+                    </div>
+                    <span className="room-link-label">
+                      {room.status === "ACTIVE"
+                        ? t("Continue studying")
+                        : t("Read the rundown")}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              !failed && (
+                <div className="room-empty">
+                  <div className="annotation-mark" aria-hidden="true">
+                    [ ]
+                  </div>
+                  <div>
+                    <h2>{t("Your first room starts with a subject")}</h2>
+                    <p>
+                      {t(
+                        "Choose a topic, add your notes, and share the room link with your study group.",
+                      )}
+                    </p>
+                    <Link className="text-link" href="/rooms/new">
+                      {t("Create your first room")}
+                    </Link>
+                  </div>
+                </div>
+              )
+            )}
+          </section>
+        )}
+        <section className="study-flow" aria-labelledby="flow-heading">
+          <div className="flow-intro">
+            <h2 id="flow-heading">
+              {t("From a difficult passage")}
+              <br />
+              {t("to a plan for next time")}
+            </h2>
+            <p>
+              {t(
+                "Keep the material, the discussion, and your confidence in the same place.",
+              )}
+            </p>
           </div>
-          <div>
-            <ChartNoAxesCombined size={26} />
-            <section>
-              <h3>How sure are you?</h3>
+          <ol className="flow-steps">
+            <li>
+              <h3>{t("Read the source")}</h3>
               <p>
-                A different kind of quiz. Share your real confidence, then learn
-                from the reveal.
+                {t(
+                  "Upload course notes. Answers cite the exact passages, so you can check the reasoning.",
+                )}
               </p>
-            </section>
-          </div>
-          <div>
-            <BookOpen size={26} />
-            <section>
-              <h3>Leave with a next step.</h3>
+            </li>
+            <li>
+              <h3>{t("Say how sure you are")}</h3>
               <p>
-                A thoughtful rundown of what clicked, what didn’t, and where to
-                go next.
+                {t(
+                  "Assign probabilities in a shared quiz. Submissions stay private until the round closes.",
+                )}
               </p>
-            </section>
-          </div>
-        </div>
+            </li>
+            <li>
+              <h3>{t("Choose what to revisit")}</h3>
+              <p>
+                {t(
+                  "Your rundown brings together discussion signals and quiz results, with a personal PDF to keep.",
+                )}
+              </p>
+            </li>
+          </ol>
+        </section>
         <Newsletter />
       </main>
     </>

@@ -1,3 +1,5 @@
+import type { Locale } from "./i18n";
+import { frenchPosts, frenchFaqs } from "./content-fr";
 export const posts = [
   {
     slug: "start-a-study-session",
@@ -45,7 +47,7 @@ export const posts = [
 export const faqs = [
   [
     "How do I invite someone?",
-    "Open a room and choose Invite a friend. Share the copied link. Your friend signs in, chooses a display name, and joins the same table.",
+    "Open a room and choose Copy invite link. Share the copied link. Your friend signs in, chooses a display name, and joins the same room.",
   ],
   [
     "Which documents can I upload?",
@@ -68,6 +70,14 @@ export const faqs = [
     "Ending a session is final. The confirmation dialog gives you a chance to cancel. Your notes and rundown remain available; create a new room to study again.",
   ],
 ];
+export function getPosts(locale: Locale) {
+  return locale === "fr"
+    ? posts.map((post, index) => ({ ...post, ...frenchPosts[index] }))
+    : posts;
+}
+export function getFaqs(locale: Locale) {
+  return locale === "fr" ? frenchFaqs : faqs;
+}
 export function trackedUrl(href: string) {
   if (!/^(https?:)?\/\//i.test(href)) return href;
   try {

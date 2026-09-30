@@ -1,13 +1,18 @@
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import CodeBlock from "@/components/CodeBlock";
-import { posts } from "@/lib/content";
+import { getPosts } from "@/lib/content";
 export default async function Post({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const locale = await getLocale();
+  const t = translator(locale);
+  const posts = getPosts(locale);
   const { slug } = await params;
   const p = posts.find((p) => p.slug === slug);
   if (!p) notFound();
@@ -16,19 +21,19 @@ export default async function Post({
       <Header />
       <main id="main-content" tabIndex={-1} className="shell article-page">
         <Link className="text-link" href="/guides">
-          ← Back to the journal
+          {t("← Back to the journal")}
         </Link>
         <article>
-          <span className="eyebrow">{p.category}</span>
           <h1>{p.title}</h1>
+          <p className="meta-label">{p.category}</p>
           <p className="page-lead">{p.intro}</p>
           <p className="post-date">
-            Last updated <time dateTime={p.updated}>15 September 2026</time> ·
-            Study Room
+            {t("Last updated")}
+            <time dateTime={p.updated}>{t("15 September 2026")}</time> · Study
+            Room
           </p>
           {p.paragraphs.map((text, i) => (
             <section key={text}>
-              <span className="step-number">0{i + 1}</span>
               <p>{text}</p>
             </section>
           ))}
@@ -39,7 +44,7 @@ export default async function Post({
           )}
         </article>
         <Link href="/rooms/new" className="button">
-          Put it into practice ↗
+          {t("Create a study room")}
         </Link>
       </main>
     </>

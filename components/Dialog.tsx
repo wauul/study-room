@@ -1,5 +1,8 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useLanguage } from "@/components/LanguageProvider";
+
+import { useEffect, useRef, useId } from "react";
+import { X } from "lucide-react";
 export default function Dialog({
   title,
   children,
@@ -11,6 +14,8 @@ export default function Dialog({
   onClose: () => void;
   busy?: boolean;
 }) {
+  const { t } = useLanguage();
+  const titleId = useId();
   const ref = useRef<HTMLDialogElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -30,22 +35,22 @@ export default function Dialog({
     <dialog
       ref={ref}
       className="site-dialog"
-      aria-label={title}
+      aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
         if (!busy) onClose();
       }}
     >
       <div className="dialog-head">
-        <h2>{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button
           type="button"
           className="secondary icon-button"
-          aria-label="Close dialog"
+          aria-label={t("Close dialog")}
           disabled={busy}
           onClick={onClose}
         >
-          ×
+          <X size={20} />
         </button>
       </div>
       {children}

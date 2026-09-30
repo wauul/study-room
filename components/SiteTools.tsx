@@ -1,14 +1,20 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useLanguage } from "@/components/LanguageProvider";
+
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowUp, MessageCircle, ArrowUpRight } from "lucide-react";
 import Dialog from "./Dialog";
 import { trackedUrl } from "@/lib/content";
-import { rememberSearchOrigin, searchReturnPath } from "@/lib/search-navigation";
+import {
+  rememberSearchOrigin,
+  searchReturnPath,
+} from "@/lib/search-navigation";
 export default function SiteTools() {
-  const [progress, setProgress] = useState(0),
-    [top, setTop] = useState(false),
+  const { t } = useLanguage();
+  const progress = useRef<HTMLDivElement>(null);
+  const [top, setTop] = useState(false),
     [contact, setContact] = useState(false),
     [cookies, setCookies] = useState(false);
   const path = usePathname(),
@@ -21,10 +27,18 @@ export default function SiteTools() {
     }
   }, []);
   useEffect(() => {
+    let frame = 0;
     const update = () => {
-      const max = document.documentElement.scrollHeight - innerHeight;
-      setProgress(max > 0 ? Math.min(100, (scrollY / max) * 100) : 0);
-      setTop(scrollY > 350);
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const max = document.documentElement.scrollHeight - innerHeight;
+        if (progress.current)
+          progress.current.style.transform = `scaleX(${max > 0 ? Math.min(1, scrollY / max) : 0})`;
+        setTop((previous) =>
+          previous === scrollY > 350 ? previous : scrollY > 350,
+        );
+      });
     };
     update();
     addEventListener("scroll", update, { passive: true });
@@ -40,8 +54,15 @@ export default function SiteTools() {
         !el.closest("input,textarea,select,[contenteditable=true],dialog")
       ) {
         e.preventDefault();
-        if (path === "/search" && window.matchMedia("(max-width: 800px)").matches) router.push(searchReturnPath());
-        else { rememberSearchOrigin(); router.push("/search"); }
+        if (
+          path === "/search" &&
+          window.matchMedia("(max-width: 800px)").matches
+        )
+          router.push(searchReturnPath());
+        else {
+          rememberSearchOrigin();
+          router.push("/search");
+        }
       }
     };
     addEventListener("keydown", key);
@@ -50,6 +71,7 @@ export default function SiteTools() {
       removeEventListener("resize", update);
       removeEventListener("keydown", key);
       observer.disconnect();
+      cancelAnimationFrame(frame);
     };
   }, [path, router]);
   return (
@@ -57,13 +79,17 @@ export default function SiteTools() {
       <div
         className="scroll-progress"
         aria-hidden="true"
-        style={{ transform: `scaleX(${progress / 100})` }}
+        ref={progress}
+        style={{ transform: "scaleX(0)" }}
       />
-      <div className="floating-tools">
+      <nav
+        className="site-support-tools"
+        aria-label={t("Help and page navigation")}
+      >
         {top && (
           <button
             className="secondary icon-button"
-            aria-label="Back to top"
+            aria-label={t("Back to top")}
             onClick={() => {
               window.scrollTo({
                 top: 0,
@@ -81,18 +107,22 @@ export default function SiteTools() {
         )}
         <button
           className="contact-button"
-          aria-label="Contact Study Room"
+          aria-label={t("Get help with Study Room")}
           onClick={() => setContact(true)}
         >
           <MessageCircle size={19} />
-          <span>Let’s talk</span>
+          <span>{t("Help and feedback")}</span>
         </button>
-      </div>
+      </nav>
       {contact && (
-        <Dialog title="A little help?" onClose={() => setContact(false)}>
+        <Dialog
+          title={t("Help and feedback")}
+          onClose={() => setContact(false)}
+        >
           <p>
-            Find an answer in our help guide or report a problem to the project
-            maintainer.
+            {t(
+              "Find an answer in our help guide or report a problem to the project maintainer.",
+            )}
           </p>
           <div className="stack">
             <Link
@@ -100,7 +130,7 @@ export default function SiteTools() {
               href="/help"
               onClick={() => setContact(false)}
             >
-              Browse help & FAQ
+              {t("Browse help & FAQ")}
             </Link>
             <a
               className="button"
@@ -110,25 +140,27 @@ export default function SiteTools() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Contact via GitHub <ArrowUpRight size={17} />
+              {t("Contact via GitHub")}
+              <ArrowUpRight size={17} />
             </a>
             <small>
-              GitHub issues are public. Please leave passwords and private study
-              notes out of your report.
+              {t(
+                "GitHub issues are public. Please leave passwords and private study notes out of your report.",
+              )}
             </small>
           </div>
         </Dialog>
       )}
       {cookies && (
-        <aside className="cookie-banner" aria-label="Cookie information">
+        <aside className="cookie-banner" aria-label={t("Cookie information")}>
           <div>
-            <strong>A small note about cookies.</strong>
+            <strong>{t("Essential cookies")}</strong>
             <p>
-              We use essential cookies to keep you signed in. Your theme
-              preference stays on this device. No optional analytics cookies are
-              used.
+              {t(
+                "We use essential cookies to keep you signed in. Your theme and language preferences stay on this device. No optional analytics cookies are used.",
+              )}
             </p>
-            <Link href="/privacy">Privacy details</Link>
+            <Link href="/privacy">{t("Privacy details")}</Link>
           </div>
           <button
             onClick={() => {
@@ -138,7 +170,7 @@ export default function SiteTools() {
               setCookies(false);
             }}
           >
-            Got it
+            {t("Got it")}
           </button>
         </aside>
       )}

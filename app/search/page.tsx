@@ -1,7 +1,9 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, ArrowUpRight } from "lucide-react";
+import { Search } from "lucide-react";
 import Header from "@/components/Header";
 type Result = {
   title: string;
@@ -10,6 +12,7 @@ type Result = {
   type: string;
 };
 export default function SearchPage() {
+  const { t, locale } = useLanguage();
   const [q, setQ] = useState(""),
     [results, setResults] = useState<Result[]>([]),
     [busy, setBusy] = useState(false),
@@ -43,24 +46,23 @@ export default function SearchPage() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [q]);
+  }, [q, locale]);
   return (
     <>
       <Header />
       <main id="main-content" tabIndex={-1} className="shell search-page">
-        <span className="eyebrow">Find your next lightbulb moment</span>
-        <h1>It’s in here somewhere.</h1>
+        <h1>{t("Search Study Room")}</h1>
         <p className="page-lead">
-          Search guides, help, and your private study material.
+          {t("Search guides, help, and your private study material.")}
         </p>
         <label className="search-field">
           <Search size={23} />
-          <span className="sr-only">Search the site</span>
+          <span className="sr-only">{t("Search the site")}</span>
           <input
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Try confidence, biology, or a room name…"
+            placeholder={t("Try confidence, biology, or a room name…")}
             maxLength={100}
           />
         </label>
@@ -68,31 +70,32 @@ export default function SearchPage() {
           {busy ? (
             <>
               <span className="spinner" />
-              Searching your shelves…
+              {t("Searching…")}
             </>
           ) : error ? (
-            error
+            t(error)
           ) : q.trim().length < 2 ? (
-            "Enter at least two characters to start."
+            t("Enter at least two characters to start.")
           ) : (
-            `${results.length} results${results.length === 0 ? " — try a different phrase." : ""}`
+            t(results.length === 1 ? "{count} result" : "{count} results", {
+              count: results.length,
+            }) + (results.length === 0 ? t(" — try a different phrase.") : "")
           )}
         </div>
         {!signedIn && q.length >= 2 && !busy && (
           <p className="notice">
-            <Link href="/login">Sign in</Link> to include your own rooms, notes,
-            and discussions.
+            <Link href="/login">{t("Sign in")}</Link>{" "}
+            {t("to include your own rooms, notes, and discussions.")}
           </p>
         )}
         <div className="search-results">
           {results.map((r, i) => (
             <Link className="search-result" href={r.href} key={r.href + i}>
               <div>
-                <span className="eyebrow">{r.type}</span>
                 <h2>{r.title}</h2>
+                <p className="meta-label">{t(r.type)}</p>
                 <p>{r.description}</p>
               </div>
-              <ArrowUpRight size={20} />
             </Link>
           ))}
         </div>

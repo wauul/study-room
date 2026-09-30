@@ -2,10 +2,16 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { posts, faqs } from "@/lib/content";
+import { getPosts, getFaqs } from "@/lib/content";
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 import { apiError } from "@/lib/http";
 export async function GET(req: Request) {
   try {
+    const locale = await getLocale();
+    const t = translator(locale);
+    const posts = getPosts(locale),
+      faqs = getFaqs(locale);
     const q = (new URL(req.url).searchParams.get("q") || "")
       .trim()
       .slice(0, 100);
@@ -48,10 +54,12 @@ export async function GET(req: Request) {
       ["Create a room", "Start a collaborative study session", "/rooms/new"],
       ["Sign in", "Log in or create an account", "/login"],
     ];
-    pages.forEach(([title, description, href]) => {
-      if (matches(title + " " + description))
-        results.push({ title, description, href, type: "Page" });
-    });
+    pages
+      .map(([title, description, href]) => [t(title), t(description), href])
+      .forEach(([title, description, href]) => {
+        if (matches(title + " " + description))
+          results.push({ title, description, href, type: "Page" });
+      });
     const session = await getServerSession(authOptions);
     const userId = (session?.user as { id?: string } | undefined)?.id;
     if (userId) {

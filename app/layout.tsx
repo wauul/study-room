@@ -4,20 +4,34 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import SiteTools from "@/components/SiteTools";
 import Footer from "@/components/Footer";
-import { Lora } from "next/font/google";
-const lora = Lora({
-  subsets: ["latin", "latin-ext"],
+import { IBM_Plex_Sans } from "next/font/google";
+import { LanguageProvider } from "@/components/LanguageProvider";
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
+const studySans = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
-  variable: "--font-lora",
+  variable: "--font-study-sans",
 });
-export const metadata: Metadata = {
-  title: "Study Room — A little clearer, together",
-  description:
-    "A shared table for your notes, questions, and lightbulb moments. Study together with grounded answers and honest confidence.",
-};
-export default function Layout({ children }: { children: React.ReactNode }) {
+export async function generateMetadata(): Promise<Metadata> {
+  const t = translator(await getLocale());
+  return {
+    title: t("Study Room | Learn from your notes, together"),
+    description: t(
+      "Study together with answers cited from your course notes, confidence quizzes, and a clear plan for what to revise next.",
+    ),
+  };
+}
+export default async function Layout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const locale = await getLocale();
+  const t = translator(locale);
   return (
-    <html lang="en" className={lora.variable} suppressHydrationWarning>
+    <html lang={locale} className={studySans.variable} suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -26,12 +40,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         />
       </head>
       <body>
-        <a className="skip-link" href="#main-content">
-          Skip to content
-        </a>
-        {children}
-        <Footer />
-        <SiteTools />
+        <LanguageProvider initialLocale={locale}>
+          <a className="skip-link" href="#main-content">
+            {t("Skip to content")}
+          </a>
+          {children}
+          <Footer />
+          <SiteTools />
+        </LanguageProvider>
         <Analytics />
         <SpeedInsights />
       </body>

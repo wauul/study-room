@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { membership, HttpError } from "@/lib/auth";
 import { apiError, checkOrigin } from "@/lib/http";
 import { personalizedPdf } from "@/lib/pdf";
+import { getLocale } from "@/lib/locale";
+import { translator } from "@/lib/i18n";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(
@@ -12,6 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const t = translator(await getLocale());
     checkOrigin(req);
     const { id } = await params;
     const body = z
@@ -53,8 +56,11 @@ export async function POST(
         {
           from: process.env.RESEND_FROM || "Study Room <onboarding@resend.dev>",
           to: person.email,
-          subject: `Your Study Room rundown: ${room.name}`,
-          text: `Hi ${person.displayName},\n\nYour group rundown and personal confidence record are attached.\n\nA little clearer, together.\nStudy Room`,
+          subject: t("Your Study Room rundown: {room}", { room: room.name }),
+          text: t(
+            "Hi {name},\n\nYour group rundown and personal confidence record are attached.\n\nA little clearer, together.\nStudy Room",
+            { name: person.displayName },
+          ),
           attachments: [{ filename: "study-room-rundown.pdf", content }],
         },
         { idempotencyKey: `summary-${id}-${person.id}` },

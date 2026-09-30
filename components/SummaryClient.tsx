@@ -1,15 +1,9 @@
 "use client";
+import { useLanguage } from "@/components/LanguageProvider";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  BookOpen,
-  Download,
-  Mail,
-  ArrowUpRight,
-  Check,
-  Leaf,
-  RefreshCw,
-} from "lucide-react";
+import { BookOpen, Download, Mail, Check, RefreshCw } from "lucide-react";
 import type { Rundown } from "@/lib/summary";
 import Header from "./Header";
 type SummaryData = {
@@ -26,6 +20,8 @@ type SummaryData = {
   displayName: string;
 };
 export default function SummaryClient({ id }: { id: string }) {
+  const { t } = useLanguage();
+  const [sentCount, setSentCount] = useState(0);
   const [data, setData] = useState<SummaryData | null>(null),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -72,8 +68,11 @@ export default function SummaryClient({ id }: { id: string }) {
       });
       const b = await r.json();
       if (!r.ok) throw new Error(b.error);
+      setSentCount(b.sent);
       setNotice(
-        `${b.sent} personalized ${b.sent === 1 ? "copy sent" : "copies sent"}. Check your inbox.`,
+        b.sent === 1
+          ? "{count} personalized copy sent. Check your inbox."
+          : "{count} personalized copies sent. Check your inbox.",
       );
     } catch (e) {
       setError((e as Error).message);
@@ -115,57 +114,50 @@ export default function SummaryClient({ id }: { id: string }) {
   return (
     <>
       <Header />
-      <main id="main-content" tabIndex={-1} className="shell">
+      <main id="main-content" tabIndex={-1} className="shell summary-page">
         {error && (
           <p className="error" role="alert">
-            {error}
+            {t(error)}
           </p>
         )}
         {notice && (
           <p className="notice" role="status">
-            {notice}
+            {t(notice, { count: sentCount })}
           </p>
         )}
         {!data ? (
           <div className="empty" aria-busy={!error} role="status">
             {error ? <BookOpen size={40} /> : <span className="spinner" />}
             <h2>
-              {error ? "The rundown isn’t available." : "Gathering your notes…"}
+              {error ? t("Rundown unavailable") : t("Gathering your notes…")}
             </h2>
             <Link className="button secondary" href="/">
-              Back to your rooms
+              {t("Back to your rooms")}
             </Link>
           </div>
         ) : (
           <>
             <div className="intro">
               <div>
-                <span className="eyebrow">
-                  The session rundown / {data.roomName}
-                </span>
-                <h1 style={{ marginTop: 18 }}>
-                  A little clearer.
-                  <br />
-                  <em>A little further.</em>
-                </h1>
+                <h1>{data.roomName}</h1>
                 <p>
-                  Here’s what you worked through together, {data.displayName}.
-                  <br />
-                  And a few good places to pick up next time.
+                  {t(
+                    "Shared findings and next steps, with a personal confidence record for",
+                  )}{" "}
+                  {data.displayName}.
                 </p>
               </div>
-              <div className="summary-mark">
-                <Leaf size={40} />
-              </div>
             </div>
-            <div className="row" style={{ flexWrap: "wrap", marginBottom: 35 }}>
+            <div className="summary-actions">
               <button
                 onClick={pdf}
                 disabled={!!busy}
                 aria-busy={busy === "pdf"}
               >
                 <Download size={16} />
-                {busy === "pdf" ? "Preparing your PDF…" : "Download my PDF"}
+                {busy === "pdf"
+                  ? t("Preparing your PDF…")
+                  : t("Download my PDF")}
               </button>
               <button
                 className="secondary"
@@ -174,7 +166,9 @@ export default function SummaryClient({ id }: { id: string }) {
                 disabled={!!busy}
               >
                 <Mail size={16} />
-                {busy === "email" ? "Sending your copy…" : "Email me a copy"}
+                {busy === "email"
+                  ? t("Sending your copy…")
+                  : t("Email me a copy")}
               </button>
               {data.isHost && (
                 <button
@@ -182,8 +176,7 @@ export default function SummaryClient({ id }: { id: string }) {
                   disabled={!!busy}
                   onClick={() => email(true)}
                 >
-                  Send to all participants
-                  <ArrowUpRight size={15} />
+                  {t("Send to all participants")}
                 </button>
               )}
             </div>
@@ -196,7 +189,7 @@ export default function SummaryClient({ id }: { id: string }) {
                       className="accent"
                       style={{ display: "inline", marginRight: 12 }}
                     />
-                    What clicked
+                    {t("What clicked")}
                   </h2>
                   {data.summary.wellUnderstood.length ? (
                     data.summary.wellUnderstood.map((p, i) => (
@@ -207,51 +200,62 @@ export default function SummaryClient({ id }: { id: string }) {
                     ))
                   ) : (
                     <p className="muted">
-                      There isn’t enough evidence to call a topic mastered yet.
-                      That’s a useful place to start.
+                      {t(
+                        "There isn’t enough evidence to call a topic mastered yet. That’s a useful place to start.",
+                      )}
                     </p>
                   )}
                 </section>
                 <section className="summary-section">
-                  <h2>Worth another look</h2>
+                  <h2>{t("Worth another look")}</h2>
                   {data.summary.strugglePoints.length ? (
                     data.summary.strugglePoints.map((p, i) => (
                       <article className="insight" key={i}>
                         <div className="row between">
                           <h3>{p.topic}</h3>
-                          <span className="tag">{p.severity} priority</span>
+                          <span className="tag">
+                            {t("{severity} priority", {
+                              severity: t(p.severity),
+                            })}
+                          </span>
                         </div>
                         <p>{p.evidence}</p>
+                        <Link
+                          className="text-link"
+                          href={`/rooms/${id}/notes?chunk=${encodeURIComponent(p.sourceChunkId)}#chunk-${encodeURIComponent(p.sourceChunkId)}`}
+                        >
+                          {t("Read source passage")}
+                        </Link>
                         {p.explanation && (
                           <p className="explanation">{p.explanation}</p>
                         )}
                         {p.severity === "high" && (
                           <button
                             className="quiet"
-                            style={{ fontSize: 11, marginTop: 10 }}
+                            style={{ marginTop: 10 }}
                             disabled={!!busy}
                             onClick={() => regenerate(p.sourceChunkId)}
                           >
                             <RefreshCw size={13} />
                             {busy === p.sourceChunkId
-                              ? "Finding simpler words…"
-                              : "Explain it even more simply"}
+                              ? t("Finding simpler words…")
+                              : t("Explain it even more simply")}
                           </button>
                         )}
                       </article>
                     ))
                   ) : (
                     <p className="muted">
-                      No clear struggle signal was recorded. A quiz next time
-                      can help check understanding.
+                      {t(
+                        "No clear struggle signal was recorded. A quiz next time can help check understanding.",
+                      )}
                     </p>
                   )}
                 </section>
               </div>
               <aside>
                 <section className="summary-section">
-                  <span className="eyebrow">Keep the momentum</span>
-                  <h2 style={{ marginTop: 12 }}>Your next small steps.</h2>
+                  <h2>{t("Next study steps")}</h2>
                   {data.summary.studyTips.map((tip, i) => (
                     <div
                       className="insight row"
@@ -260,32 +264,26 @@ export default function SummaryClient({ id }: { id: string }) {
                     >
                       <span
                         className="accent"
-                        style={{ fontFamily: "var(--serif)", fontSize: 23 }}
+                        style={{ fontFamily: "var(--mono)", fontSize: 23 }}
                       >
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <p>{tip}</p>
                     </div>
                   ))}
-                  <p
-                    style={{
-                      fontFamily: "var(--serif)",
-                      fontStyle: "italic",
-                      lineHeight: 1.8,
-                      marginTop: 20,
-                    }}
-                  >
+                  <p className="suggested-next-step">
                     {data.summary.suggestedNextSteps}
                   </p>
                 </section>
                 <section className="summary-section">
-                  <h2>Your confidence record</h2>
+                  <h2>{t("Your confidence record")}</h2>
                   <p
                     className="muted"
-                    style={{ fontSize: 11, lineHeight: 1.7 }}
+                    style={{ fontSize: 13, lineHeight: 1.7 }}
                   >
-                    A personal reflection. Higher scores mean better-calibrated
-                    confidence.
+                    {t(
+                      "Your quiz submissions. A higher log score means you assigned more probability to the correct answer.",
+                    )}
                   </p>
                   {data.results.length ? (
                     data.results.map((r, i) => (
@@ -300,7 +298,7 @@ export default function SummaryClient({ id }: { id: string }) {
                                 r.quizQuestion.correctOptionIndex
                               ]
                             }
-                            % on the correct answer
+                            {t("% on the correct answer")}
                           </small>
                           <strong className="accent">
                             {r.zeroProbability ? "−∞" : r.score.toFixed(3)}
@@ -310,23 +308,23 @@ export default function SummaryClient({ id }: { id: string }) {
                     ))
                   ) : (
                     <p style={{ marginTop: 20 }} className="muted">
-                      You didn’t submit a quiz answer this session.
+                      {t("You didn’t submit a quiz answer this session.")}
                     </p>
                   )}
                 </section>
               </aside>
             </div>
-            <Link href="/rooms/new" className="button secondary">
-              Make room for another session
-              <ArrowUpRight size={16} />
-            </Link>
-            <Link
-              href={`/rooms/${id}/notes`}
-              className="button secondary"
-              style={{ marginLeft: 12 }}
+            <nav
+              className="summary-navigation"
+              aria-label={t("Continue studying")}
             >
-              Read saved notes & discussion
-            </Link>
+              <Link href="/rooms/new" className="button secondary">
+                {t("Create another room")}
+              </Link>
+              <Link href={`/rooms/${id}/notes`} className="button secondary">
+                {t("Read saved notes & discussion")}
+              </Link>
+            </nav>
           </>
         )}
       </main>
