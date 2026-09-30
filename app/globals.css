@@ -2241,32 +2241,63 @@ body:has(.workspace) .site-support-tools {
 /* Header preferences share the room's restrained control styling. */
 .language-control {
   position: relative;
-  display: flex;
-  align-items: center;
-  color: var(--text);
+  flex-shrink: 0;
 }
-.language-control > svg {
-  position: absolute;
-  pointer-events: none;
-}
-.language-control > svg:first-child {
-  left: 11px;
-}
-.language-control > svg:last-child {
-  right: 9px;
-}
-.language-control select {
-  appearance: none;
-  width: auto;
+.language-trigger {
+  min-width: 126px;
   min-height: 44px;
-  padding: 9px 27px 9px 34px;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
   font-size: 0.82rem;
-  background: var(--surface);
-  border-color: var(--line-strong);
-  cursor: pointer;
+  font-weight: 500;
 }
-.language-control select:hover {
+.language-trigger svg {
+  flex-shrink: 0;
+}
+.language-chevron {
+  margin-left: auto;
+  transition: transform 0.18s ease;
+}
+.language-trigger[aria-expanded="true"] .language-chevron {
+  transform: rotate(180deg);
+}
+.language-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.language-menu {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 180px;
+  max-width: calc(100vw - 32px);
+  padding: 6px;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+}
+.language-option {
+  width: 100%;
+  justify-content: space-between;
+  padding: 11px 12px;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+}
+.language-option[aria-checked="true"],
+.language-option:hover {
   background: var(--accent-soft);
+  color: var(--accent);
+}
+.language-option:focus-visible {
+  outline-offset: -2px;
+}
+.language-option svg {
+  flex-shrink: 0;
 }
 .theme-toggle {
   flex-shrink: 0;
@@ -2311,15 +2342,15 @@ body:has(.workspace) .site-support-tools {
   .search-launch:not(.search-is-open) {
     display: none;
   }
-  .language-control select {
+  .language-trigger {
     font-size: 0.78rem;
   }
 }
 @media (max-width: 420px) {
-  .language-control > svg:first-child {
+  .language-icon {
     display: none;
   }
-  .language-control select {
-    padding-left: 10px;
+  .language-trigger {
+    min-width: 102px;
   }
 }

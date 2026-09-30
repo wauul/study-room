@@ -1,5 +1,6 @@
 "use client";
 import { useLanguage } from "@/components/LanguageProvider";
+import LanguageMenu from "@/components/LanguageMenu";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,12 +16,9 @@ import {
   Plus,
   Sun,
   Moon,
-  Languages,
-  ChevronDown,
 } from "lucide-react";
-import type { Locale } from "@/lib/i18n";
 export default function Header() {
-  const { t, locale, setLocale } = useLanguage();
+  const { t } = useLanguage();
   const header = useRef<HTMLElement>(null);
   const [theme, setTheme] = useState("light"),
     [open, setOpen] = useState(false);
@@ -141,22 +139,7 @@ export default function Header() {
             <Sun size={18} aria-hidden="true" />
           )}
         </button>
-        <div className="language-control">
-          <Languages size={16} aria-hidden="true" />
-          <select
-            aria-label={t("Language")}
-            value={locale}
-            onChange={(e) => setLocale(e.target.value as Locale)}
-          >
-            <option value="en" lang="en">
-              English
-            </option>
-            <option value="fr" lang="fr">
-              Français
-            </option>
-          </select>
-          <ChevronDown size={13} aria-hidden="true" />
-        </div>
+        <LanguageMenu key={path} />
         <Link href="/rooms/new" className="button header-create">
           <Plus size={16} />
           {t("New room")}

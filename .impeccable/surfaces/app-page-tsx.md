@@ -29,7 +29,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 ## Coverage checklist
 
 - [x] Home: anonymous proposition; authenticated room list; empty and failed room loading
-- [x] Header/footer: active navigation, mobile menu, search shortcut, two-state theme button with system bootstrap, styled native English/Français dropdown
+- [x] Header/footer: active navigation, mobile menu, search shortcut, two-state theme button with system bootstrap, custom English/Français menu
 - [x] English/French: cookie persistence, server locale resolution, translated interface/public content and authored source preservation
 - [x] Login/register: password toggle, validation, busy/error, return navigation; Google/Microsoft/GitHub configured/unavailable states
 - [x] New room: name, display name, optional focus, validation and permission redirect

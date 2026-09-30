@@ -50,6 +50,10 @@ Provider buttons are enabled only when both credentials exist, otherwise disable
 
 The subsequent credential setup on 30 September 2026 applied the migration to both databases and provisioned Google, Microsoft and GitHub for production and local development. All three live callbacks and authenticated room access were verified; the existing test account was preserved. See [OAuth setup](oauth-setup.md) for the current configuration, expiry and exact verification scope. This supersedes the authentication-specific limits above, while the other live-service limits remain.
 
+## Custom language menu
+
+The subsequent language-control refinement replaces the native select with a custom themed menu. Its English and Français rows expose checked state, show the selected-language checkmark, and keep the existing locale cookie/server refresh behavior. Keyboard checks cover arrow navigation, Home/End, Escape with focus restoration, and Tab continuing to the next header control; click-away dismissal and French persistence after reload passed. Desktop and 390px mobile captures in both themes are saved under ignored `.tools/language-menu/`; the menu also fits 320px and 820px widths without horizontal overflow. No browser console errors were recorded. Typecheck and all 16 unit tests passed. The source review used the React best-practices guidance; the design detector flagged existing compact type sizes as advisory differences from its frontmatter ramp, which are documented component sizes in DESIGN.md.
+
 ## Research provenance
 
 Design work consulted [taste-skill](https://github.com/Leonxlnx/taste-skill), [Impeccable](https://github.com/pbakaus/impeccable), and [UI UX Pro Max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill). The [21st.dev source citation rail](https://21st.dev/@rmahammad/components/source-citation-rail) informed contextual navigation; no third-party component code/assets were copied. The [awesome-ai-tools-for-ui directory](https://github.com/maxbogo/awesome-ai-tools-for-ui) selectively led to a Shape of AI grounding-pattern reference; it was not installed wholesale. Implementation uses existing primitives and original CSS.
