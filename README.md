@@ -6,6 +6,8 @@ Live app: https://study-room-ten-blond.vercel.app · Repository: https://github.
 
 These deployments currently use manual releases: run `vercel deploy --prod` for the frontend and choose **Deploy latest commit** in Render for the socket service. A GitHub push alone does not update these deployments.
 
+Sentry is integrated across the browser, Next.js server/edge hooks and the realtime process. Setup, privacy controls, build-only source-map secrets, runtime flags and deployment steps are in [Sentry operations](docs/sentry.md); verification evidence is in [Sentry verification](docs/sentry-verification.md). Empty DSNs safely disable local monitoring. The current Sentry organization is `study-room-iq`, with separate `study-room-web` and `study-room-realtime` projects.
+
 ## Run locally
 
 Use Node 22 and a Postgres database with permission to install pgvector. On Windows ARM, use an x64 Node runtime for the native ONNX dependency.
@@ -88,7 +90,7 @@ The Study notation interface uses IBM Plex Sans, the original violet/slate palet
 
 1. Create a free Neon project. Run `npx prisma migrate deploy` against its connection URI.
 2. Import the public repository into a Vercel Hobby project. Set the web environment variables and deploy.
-3. Create a Render free Node web service using `deploy/render.yaml`, or manually use `npm ci && npx prisma generate` and `npm run server`. Set DATABASE_URL, NEXTAUTH_SECRET, GROQ_API_KEY, GROQ_MODEL, and APP_ORIGIN. Never select a paid plan without consent.
+3. Create a Render free Node web service using `deploy/render.yaml`, or manually use `npm ci && npm run server:build` and `npm run server:start`. Set DATABASE_URL, NEXTAUTH_SECRET, GROQ_API_KEY, GROQ_MODEL, APP_ORIGIN and the Sentry runtime/build variables described in [Sentry operations](docs/sentry.md). Never select a paid plan without consent.
 4. Set SOCKET_SERVER_URL on Vercel to the resulting Render HTTPS URL. Set APP_ORIGIN on Render to the canonical Vercel URL. Redeploy after updating environment variables.
 5. Use a verified Resend domain. The default onboarding sender can only deliver to the Resend account owner; a verified domain is required for other recipients.
 

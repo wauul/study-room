@@ -7,6 +7,7 @@ import { apiError, checkOrigin } from "@/lib/http";
 import { personalizedPdf } from "@/lib/pdf";
 import { getLocale } from "@/lib/locale";
 import { translator } from "@/lib/i18n";
+import { operation } from "@/lib/telemetry";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(
@@ -51,11 +52,12 @@ export async function POST(
     let sent = 0;
     for (const person of recipients) {
       if (!person.email) continue;
+      const recipientEmail = person.email;
       const content = await personalizedPdf(id, person.id);
-      const result = await resend.emails.send(
+      const result = await operation("email.send", { provider: "resend" }, () => resend.emails.send(
         {
           from: process.env.RESEND_FROM || "Study Room <onboarding@resend.dev>",
-          to: person.email,
+          to: recipientEmail,
           subject: t("Your Study Room rundown: {room}", { room: room.name }),
           text: t(
             "Hi {name},\n\nYour group rundown and personal confidence record are attached.\n\nA little clearer, together.\nStudy Room",
@@ -64,16 +66,18 @@ export async function POST(
           attachments: [{ filename: "study-room-rundown.pdf", content }],
         },
         { idempotencyKey: `summary-${id}-${person.id}` },
-      );
-      if (result.error)
+      ));
+      if (result.error) {
         throw new HttpError(
           502,
           `Email delivery failed after ${sent} sends. Check your verified sender and Resend limits.`,
+          { cause: result.error },
         );
+      }
       sent++;
     }
     return NextResponse.json({ sent });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "email.send");
   }
 }

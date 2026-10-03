@@ -1,3 +1,4 @@
+import { operation } from "../telemetry";
 import path from "node:path";
 let extractor: Promise<any> | undefined;
 const cache = new Map<string, { expires: number; value: Promise<number[]> }>();
@@ -35,12 +36,20 @@ async function getExtractor() {
   return extractor;
 }
 export async function tokenLength(text: string): Promise<number> {
-  return (await getExtractor()).tokenizer(text, { truncation: false }).input_ids
-    .size;
+  return operation("embedding.tokenize", { provider: "local" }, async () => {
+    return (await getExtractor()).tokenizer(text, { truncation: false })
+      .input_ids.size;
+  });
 }
 export async function embed(text: string): Promise<number[]> {
-  const output = await (
-    await getExtractor()
-  )(text, { pooling: "mean", normalize: true });
-  return Array.from(output.data as Float32Array);
+  return operation(
+    "embedding.generate",
+    { provider: "local", model: "Xenova/all-MiniLM-L6-v2" },
+    async () => {
+      const output = await (
+        await getExtractor()
+      )(text, { pooling: "mean", normalize: true });
+      return Array.from(output.data as Float32Array);
+    },
+  );
 }

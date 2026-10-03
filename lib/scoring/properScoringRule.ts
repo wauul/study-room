@@ -1,10 +1,11 @@
+import { ExpectedError } from "../telemetry";
 export function validateDistribution(p: number[]): void {
   if (
     p.length !== 4 ||
     p.some((x) => !Number.isFinite(x) || x < 0 || x > 100) ||
     Math.abs(p.reduce((a, b) => a + b, 0) - 100) > 0.001
   ) {
-    throw new Error(
+    throw new ExpectedError(
       "Enter four probabilities between 0 and 100 that sum to 100%.",
     );
   }

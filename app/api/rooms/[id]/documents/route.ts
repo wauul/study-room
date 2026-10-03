@@ -3,6 +3,7 @@ import { z } from "zod";
 import { membership, HttpError } from "@/lib/auth";
 import { apiError, checkOrigin } from "@/lib/http";
 import { ingest } from "@/lib/rag/ingest";
+import { captureFailure, operation } from "@/lib/telemetry";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(
@@ -29,11 +30,19 @@ export async function POST(
       const bytes = Buffer.from(await file.arrayBuffer());
       if (bytes.subarray(0, 5).toString() !== "%PDF-")
         throw new HttpError(400, "This is not a valid PDF.");
-      const { PDFParse } = await import("pdf-parse");
+      const { PDFParse, InvalidPDFException, PasswordException, FormatError } =
+        await import("pdf-parse");
       const parser = new PDFParse({ data: new Uint8Array(bytes) });
       try {
-        text = (await parser.getText()).text;
-      } catch {
+        text = (await operation("pdf.parse", {}, () => parser.getText())).text;
+      } catch (error) {
+        // Parser format/password errors are user input. Capture unexpected implementation failures.
+        if (!(
+          error instanceof InvalidPDFException ||
+          error instanceof PasswordException ||
+          error instanceof FormatError
+        ))
+          captureFailure(error, "pdf.parse");
         throw new HttpError(
           400,
           "This PDF could not be read. Use an unencrypted, selectable-text PDF or paste its text.",
@@ -51,6 +60,6 @@ export async function POST(
     const document = await ingest(id, filename, text, sourceType);
     return NextResponse.json(document, { status: 201 });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "document.ingest");
   }
 }

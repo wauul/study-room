@@ -25,6 +25,6 @@ export async function POST(req: Request) {
         { error: "An account with this email already exists." },
         { status: 409 },
       );
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }

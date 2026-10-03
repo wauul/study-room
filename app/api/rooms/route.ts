@@ -17,7 +17,7 @@ export async function GET() {
       }),
     );
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }
 export async function POST(req: Request) {
@@ -50,6 +50,6 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(room, { status: 201 });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }

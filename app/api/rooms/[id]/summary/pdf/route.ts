@@ -19,6 +19,6 @@ export async function POST(
       },
     });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "pdf.export");
   }
 }

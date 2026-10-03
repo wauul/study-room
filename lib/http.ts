@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { HttpError } from "./auth";
-export function apiError(error: unknown) {
-  if (error instanceof HttpError)
+import { unstable_rethrow } from "next/navigation";
+import { captureFailure } from "./telemetry";
+export function apiError(error: unknown, operation = "http.request") {
+  unstable_rethrow(error);
+  if (error instanceof HttpError) {
+    if (error.status >= 500) captureFailure(error.cause || error, operation);
     return NextResponse.json(
       { error: error.message },
       { status: error.status },
     );
+  }
   if (error instanceof ZodError)
     return NextResponse.json(
       { error: error.issues[0]?.message ?? "Invalid input." },
       { status: 400 },
     );
-  console.error(
-    "Request failed",
-    error instanceof Error
-      ? `${error.name}: ${error.message.replace(/postgres(?:ql)?:\/\/\S+|gsk_\w+|re_\w+/g, "[redacted]")}`
-      : "UnknownError",
-  );
+  captureFailure(error, operation);
+  console.error("Request failed");
   return NextResponse.json(
     {
       error:

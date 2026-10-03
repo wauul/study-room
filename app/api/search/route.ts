@@ -146,6 +146,6 @@ export async function GET(req: Request) {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }

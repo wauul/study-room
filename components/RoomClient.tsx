@@ -1,4 +1,5 @@
 "use client";
+import { emitWithTrace } from "@/lib/telemetry/socket-client";
 import { useLanguage } from "@/components/LanguageProvider";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
@@ -194,6 +195,7 @@ export default function RoomClient({ id }: { id: string }) {
     followTail = useRef(true);
   messagesRef.current = messages;
   const socket = useRef<Socket | null>(null),
+    socketTarget = useRef(""),
     scroll = useRef<HTMLDivElement>(null),
     offset = useRef(0),
     participant = useRef(""),
@@ -354,13 +356,14 @@ export default function RoomClient({ id }: { id: string }) {
         transports: ["websocket", "polling"],
         reconnection: true,
       });
+      socketTarget.current = body.socketUrl;
       socket.current = s;
       s.on("connect", () => {
         setConnected(true);
         setBusy(false);
         setEnding(false);
         setError("");
-        s.emit("join-room", {}, () => {});
+        emitWithTrace(s, "join-room", {}, body.socketUrl, () => {});
         void load();
       });
       s.on("disconnect", () => setConnected(false));
@@ -480,7 +483,7 @@ export default function RoomClient({ id }: { id: string }) {
       setError("Wait for the room to reconnect.");
       return;
     }
-    socket.current.emit(event, payload, (r: any) => {
+    emitWithTrace(socket.current, event, payload, socketTarget.current, (r: any) => {
       if (!r.ok) setError(r.error);
       callback?.(r);
     });

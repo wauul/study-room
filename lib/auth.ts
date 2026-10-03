@@ -5,9 +5,25 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { db } from "./db";
 import { getServerSession } from "next-auth";
+import { captureFailure } from "./telemetry";
+// NextAuth handles adapter errors internally, so capture them at the database boundary.
+const adapter = new Proxy(PrismaAdapter(db), {
+  get(target, property, receiver) {
+    const method = Reflect.get(target, property, receiver);
+    if (typeof method !== "function") return method;
+    return async (...args: unknown[]) => {
+      try {
+        return await Reflect.apply(method, target, args);
+      } catch (error) {
+        captureFailure(error, "auth.database");
+        throw error;
+      }
+    };
+  },
+});
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
-  adapter: PrismaAdapter(db),
+  adapter,
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
   pages: { signIn: "/login", error: "/login" },
   providers: [
@@ -24,9 +40,15 @@ export const authOptions: NextAuthOptions = {
           credentials.password.length > 72
         )
           return null;
-        const user = await db.user.findUnique({
-          where: { email: credentials.email.trim().toLowerCase() },
-        });
+        let user;
+        try {
+          user = await db.user.findUnique({
+            where: { email: credentials.email.trim().toLowerCase() },
+          });
+        } catch (error) {
+          captureFailure(error, "auth.database");
+          throw error;
+        }
         if (
           !user ||
           !user.hashedPassword ||
@@ -65,11 +87,15 @@ export async function requireUser() {
   return { id, email: session?.user?.email ?? "" };
 }
 export class HttpError extends Error {
+  readonly expected: boolean;
   constructor(
     public status: number,
     message: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
+    this.name = "HttpError";
+    this.expected = status >= 400 && status < 500;
   }
 }
 export async function membership(roomId: string, hostOnly = false) {

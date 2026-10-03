@@ -1,4 +1,14 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
+import {
+  captureFailure,
+  ExpectedError,
+  isolatedOperation,
+  operation,
+} from "../lib/telemetry";
+import { socketOperation } from "../lib/telemetry/socket";
+import { expectedError } from "../lib/telemetry/privacy";
+import { smokeEnabled } from "../lib/telemetry/smoke";
 import { createServer } from "node:http";
 import { Server, Socket } from "socket.io";
 import { z } from "zod";
@@ -50,12 +60,34 @@ const io = new Server(http, {
   maxHttpBufferSize: 20000,
 });
 io.use(async (socket, next) => {
+  if (
+    smokeEnabled() &&
+    socket.handshake.auth.smokeToken === process.env.SENTRY_SMOKE_TOKEN
+  ) {
+    socket.data = { smoke: true };
+    next();
+    return;
+  }
   try {
     socket.data = await verifyRoomToken(
       z.string().parse(socket.handshake.auth.token),
     );
     next();
-  } catch {
+  } catch (error) {
+    // Invalid/expired JWTs and malformed credentials are expected. Database/configuration failures are not.
+    if (
+      !(error instanceof z.ZodError) &&
+      !(
+        error instanceof Error &&
+        (error.name.startsWith("JWT") ||
+          error.name.startsWith("JWS") ||
+          error.name.startsWith("JOSE") ||
+          error.message === "Invalid room token")
+      )
+    )
+      isolatedOperation("realtime.authenticate", () =>
+        captureFailure(error, "realtime.authenticate"),
+      );
     next(new Error("Session expired. Reload this page to reconnect."));
   }
 });
@@ -97,9 +129,9 @@ async function roomFor(socket: Socket, host = false, active = true) {
     include: { room: true },
   });
   if (!participant || (host && participant.room.hostUserId !== userId))
-    throw new Error("You do not have permission for this action.");
+    throw new ExpectedError("You do not have permission for this action.");
   if (active && participant.room.status !== "ACTIVE")
-    throw new Error("This session has ended.");
+    throw new ExpectedError("This session has ended.");
   return participant.room;
 }
 function peers(id: string) {
@@ -142,6 +174,9 @@ async function leaderboard(roomId: string) {
     GROUP BY p.id,p."displayName" ORDER BY "zeroProbability" ASC,score DESC,p.id`;
 }
 async function reveal(roomId: string, round: Round) {
+  return isolatedOperation("quiz.reveal", () => revealRound(roomId, round));
+}
+async function revealRound(roomId: string, round: Round) {
   if (round.locking) return;
   round.locking = true;
   clearTimeout(round.timer);
@@ -172,7 +207,8 @@ async function reveal(roomId: string, round: Round) {
     });
     const s = await state(roomId);
     s.round = undefined;
-  } catch {
+  } catch (error) {
+    captureFailure(error, "quiz.reveal");
     round.locking = false;
     round.timer = setTimeout(() => void reveal(roomId, round), 2000);
     io.to(channel(roomId)).emit(
@@ -191,7 +227,7 @@ async function answer(
   const retrieved =
     fixedChunks || (await retrieve(room, question, "COURSE_MATERIAL", 5, true));
   if (!retrieved.length)
-    throw new Error(
+    throw new ExpectedError(
       "No matching course material. Upload a document or adjust the study focus.",
     );
   // Calibrated on the documented supported/unsupported regression questions.
@@ -244,36 +280,58 @@ async function answer(
   };
   const tokenTimer = setInterval(flushTokens, 50);
   try {
-    const stream = await groq().chat.completions.create({
-      model: process.env.GROQ_ANSWER_MODEL || model(),
-      temperature: 0.1,
-      stream: true,
-      max_completion_tokens: 1800,
-      messages: [
-        {
-          role: "system",
-          content: answerPrompt(kind === "simplified"),
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            question,
-            studyFocus: room.studyFocusRaw,
-            passages: chunks.map((c, i) => ({
-              label: i + 1,
-              section: c.sectionLabel,
-              content: c.content,
-            })),
-          }),
-        },
-      ],
-    });
-    for await (const part of stream) {
-      const token = part.choices[0]?.delta.content || "";
-      if (token) tokenEvents++;
-      content += token;
-      pendingTokens += token;
-    }
+    await operation(
+      "ai.generation",
+      { provider: "groq", model: process.env.GROQ_ANSWER_MODEL || model() },
+      async () => {
+        const started = performance.now();
+        const firstToken = Sentry.startInactiveSpan({
+          name: "ai.first-token",
+          op: "ai.first-token",
+        });
+        let receivedToken = false;
+        try {
+          const stream = await groq().chat.completions.create({
+            model: process.env.GROQ_ANSWER_MODEL || model(),
+            temperature: 0.1,
+            stream: true,
+            max_completion_tokens: 1800,
+            messages: [
+              {
+                role: "system",
+                content: answerPrompt(kind === "simplified"),
+              },
+              {
+                role: "user",
+                content: JSON.stringify({
+                  question,
+                  studyFocus: room.studyFocusRaw,
+                  passages: chunks.map((c, i) => ({
+                    label: i + 1,
+                    section: c.sectionLabel,
+                    content: c.content,
+                  })),
+                }),
+              },
+            ],
+          });
+          for await (const part of stream) {
+            const token = part.choices[0]?.delta.content || "";
+            if (token && !receivedToken) {
+              receivedToken = true;
+              firstToken.setAttribute("ttft_ms", performance.now() - started);
+              firstToken.end();
+            }
+            if (token) tokenEvents++;
+            content += token;
+            pendingTokens += token;
+          }
+        } finally {
+          if (!receivedToken) firstToken.end();
+          Sentry.getActiveSpan()?.setAttribute("tokens", tokenEvents);
+        }
+      },
+    );
     flushTokens();
     await db.chatMessage.update({
       where: { id: message.id },
@@ -284,6 +342,7 @@ async function answer(
       content,
     });
   } catch (error) {
+    captureFailure(error, "ai.generation");
     await db.chatMessage.update({
       where: { id: message.id },
       data: {
@@ -352,30 +411,56 @@ async function drainSimplifications(room: Room, s: State) {
 io.on("connection", (socket) => {
   let lastAction = 0;
   function on(name: string, handler: (payload: any) => Promise<unknown>) {
-    socket.on(name, async (payload, ack) => {
-      try {
-        if (
-          name !== "join-room" &&
-          !socket.rooms.has(channel(socket.data.roomId))
-        )
-          throw new Error("Join the room first.");
-        if (name !== "join-room" && Date.now() - lastAction < 250)
-          throw new Error("Please wait a moment.");
-        lastAction = Date.now();
-        const result = await handler(payload);
-        if (typeof ack === "function")
-          ack({ ok: true, ...((result as object) || {}) });
-      } catch (error) {
-        const safe =
-          error instanceof z.ZodError
-            ? "Invalid request."
-            : error instanceof Error && !("status" in error)
-              ? error.message
-              : "The AI service is unavailable. Please try again shortly.";
-        socket.emit("room-error", safe);
-        if (typeof ack === "function") ack({ ok: false, error: safe });
-      }
+    socket.on(name, (payload, traceOrAck, maybeAck) =>
+      socketOperation(
+        `socket.${name}`,
+        traceOrAck,
+        origins.includes(socket.handshake.headers.origin || ""),
+        async () => {
+          const ack = typeof traceOrAck === "function" ? traceOrAck : maybeAck;
+          try {
+            if (
+              name !== "join-room" &&
+              name !== "telemetry-smoke" &&
+              !socket.rooms.has(channel(socket.data.roomId))
+            )
+              throw new ExpectedError("Join the room first.");
+            if (name !== "join-room" && Date.now() - lastAction < 250)
+              throw new ExpectedError("Please wait a moment.");
+            lastAction = Date.now();
+            const result = await handler(payload);
+            if (typeof ack === "function")
+              ack({ ok: true, ...((result as object) || {}) });
+          } catch (error) {
+            if (!(error instanceof z.ZodError) && !expectedError(error))
+              captureFailure(error, `socket.${name}`);
+            const safe =
+              error instanceof z.ZodError
+                ? "Invalid request."
+                : error instanceof Error && !("status" in error)
+                  ? error.message
+                  : "The AI service is unavailable. Please try again shortly.";
+            socket.emit("room-error", safe);
+            if (typeof ack === "function") ack({ ok: false, error: safe });
+          }
+        },
+      ),
+    );
+  }
+  if (socket.data.smoke) {
+    on("telemetry-smoke", async (payload) => {
+      if (payload?.mode === "error")
+        throw new TypeError("Synthetic socket failure: private-study-sentinel");
+      await operation("retrieval.search", { count: 2 }, async () => {
+        await operation(
+          "retrieval.rerank",
+          { count: 2, provider: "local" },
+          () => Promise.resolve(),
+        );
+      });
+      return { synthetic: true };
     });
+    return;
   }
   on("join-room", async () => {
     const room = await roomFor(socket, false, false);
@@ -412,7 +497,7 @@ io.on("connection", (socket) => {
     const room = await roomFor(socket);
     const s = await state(room.id);
     if (s.answering || s.ending)
-      throw new Error("Please wait for the current answer to finish.");
+      throw new ExpectedError("Please wait for the current answer to finish.");
     s.answering = true;
     try {
       const message = await db.chatMessage.create({
@@ -437,7 +522,7 @@ io.on("connection", (socket) => {
     const { messageId } = z.object({ messageId: z.string() }).parse(payload);
     const room = await roomFor(socket);
     const s = await state(room.id);
-    if (s.ending) throw new Error("The session is ending.");
+    if (s.ending) throw new ExpectedError("The session is ending.");
     const message = await db.chatMessage.findFirst({
       where: {
         id: messageId,
@@ -446,7 +531,7 @@ io.on("connection", (socket) => {
         status: { in: ["complete", "streaming"] },
       },
     });
-    if (!message) throw new Error("This answer is unavailable.");
+    if (!message) throw new ExpectedError("This answer is unavailable.");
     await db.lostClick.upsert({
       where: {
         chatMessageId_participantId: {
@@ -475,7 +560,7 @@ io.on("connection", (socket) => {
     const room = await roomFor(socket, true);
     const s = await state(room.id);
     if (s.round || s.generating || s.ending)
-      throw new Error("Finish the current round first.");
+      throw new ExpectedError("Finish the current round first.");
     s.generating = true;
     try {
       const question = await generateQuestion(room);
@@ -517,11 +602,13 @@ io.on("connection", (socket) => {
       round.locking ||
       Date.now() >= round.question.endsAt.getTime()
     )
-      throw new Error("This round is locked.");
+      throw new ExpectedError("This round is locked.");
     if (!round.eligible.has(id))
-      throw new Error("You joined during this round. Play in the next one.");
+      throw new ExpectedError(
+        "You joined during this round. Play in the next one.",
+      );
     if (round.submissions.has(id))
-      throw new Error("Your probabilities are already locked in.");
+      throw new ExpectedError("Your probabilities are already locked in.");
     // Reserve before awaiting persistence: duplicate submissions cannot race.
     round.submissions.set(id, distribution);
     const score = properScoringRule(
@@ -555,7 +642,7 @@ io.on("connection", (socket) => {
     const room = await roomFor(socket, true);
     const s = await state(room.id);
     if (s.answering || s.generating || s.ending || s.round)
-      throw new Error("Wait for the answer or quiz round to finish.");
+      throw new ExpectedError("Wait for the answer or quiz round to finish.");
     s.ending = true;
     io.to(channel(room.id)).emit("session-ending");
     try {
@@ -572,36 +659,76 @@ io.on("connection", (socket) => {
     );
   });
 });
-setInterval(() => {
-  for (const [id, s] of states) {
-    if (peers(id).length) {
-      s.lastUsed = Date.now();
-      io.to(channel(id)).emit("heatmap-update", s.heat.snapshot());
-    } else if (
-      !s.answering &&
-      !s.round &&
-      !s.ending &&
-      Date.now() - s.lastUsed > 600000
-    )
-      states.delete(id);
-  }
+const heatTimer = setInterval(() => {
+  if (!states.size) return;
+  return isolatedOperation("realtime.heatmap", () => {
+    try {
+      for (const [id, s] of states) {
+        if (peers(id).length) {
+          s.lastUsed = Date.now();
+          io.to(channel(id)).emit("heatmap-update", s.heat.snapshot());
+        } else if (
+          !s.answering &&
+          !s.round &&
+          !s.ending &&
+          Date.now() - s.lastUsed > 600000
+        )
+          states.delete(id);
+      }
+    } catch (error) {
+      captureFailure(error, "realtime.heatmap");
+    }
+  });
 }, 4000).unref();
 // On restart, mark interrupted answers and lock persisted rounds; submissions are
 // durable but never exposed until locked. Reconnecting clients recover via REST.
 async function start() {
-  await db.chatMessage.updateMany({
-    where: { status: "streaming" },
-    data: { status: "failed" },
-  });
-  await db.quizQuestion.updateMany({
-    where: { lockedAt: null },
-    data: { lockedAt: new Date() },
-  });
-  http.listen(Number(process.env.PORT) || 3001, "0.0.0.0", () =>
-    console.log("Study Room realtime listening"),
+  if (!(smokeEnabled() && process.env.SENTRY_SMOKE_ONLY === "true")) {
+    await db.chatMessage.updateMany({
+      where: { status: "streaming" },
+      data: { status: "failed" },
+    });
+    await db.quizQuestion.updateMany({
+      where: { lockedAt: null },
+      data: { lockedAt: new Date() },
+    });
+  }
+  http.listen(
+    Number(process.env.PORT) || 3001,
+    smokeEnabled() && process.env.SENTRY_SMOKE_ONLY === "true"
+      ? "127.0.0.1"
+      : "0.0.0.0",
+    () => console.log("Study Room realtime listening"),
   );
 }
-start().catch(() => {
+let shuttingDown = false;
+async function shutdown(code: number, error?: unknown) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  // A hung DB/provider must never keep a broken process alive.
+  const deadline = setTimeout(() => process.exit(code), 5000);
+  clearInterval(heatTimer);
+  for (const s of states.values()) if (s.round) clearTimeout(s.round.timer);
+  if (error) captureFailure(error, "realtime.startup");
+  try {
+    await Promise.allSettled([
+      Sentry.flush(2000),
+      db.$disconnect(),
+      new Promise<void>((resolve) =>
+        io.close(() => http.close(() => resolve())),
+      ),
+    ]);
+  } finally {
+    clearTimeout(deadline);
+    process.exit(code);
+  }
+}
+process.on("uncaughtException", (error) => void shutdown(1, error));
+process.on("unhandledRejection", (error) => void shutdown(1, error));
+process.on("SIGTERM", () => void shutdown(0));
+process.on("SIGINT", () => void shutdown(0));
+http.on("error", (error) => void shutdown(1, error));
+isolatedOperation("realtime.startup", start).catch(async (error) => {
   console.error("Database connection failed during startup");
-  process.exit(1);
+  await shutdown(1, error);
 });

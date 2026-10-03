@@ -30,7 +30,7 @@ export async function GET(
       displayName: participant.displayName,
     });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "summary.generate");
   }
 }
 export async function POST(
@@ -59,6 +59,6 @@ export async function POST(
     });
     return NextResponse.json({ explanation: point.explanation });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "summary.generate");
   }
 }

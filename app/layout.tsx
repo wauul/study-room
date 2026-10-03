@@ -8,6 +8,7 @@ import { IBM_Plex_Sans } from "next/font/google";
 import { LanguageProvider } from "@/components/LanguageProvider";
 import { getLocale } from "@/lib/locale";
 import { translator } from "@/lib/i18n";
+import * as Sentry from "@sentry/nextjs";
 const studySans = IBM_Plex_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -21,6 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
     description: t(
       "Study together with answers cited from your course notes, confidence quizzes, and a clear plan for what to revise next.",
     ),
+    other: { ...Sentry.getTraceData() },
   };
 }
 export default async function Layout({

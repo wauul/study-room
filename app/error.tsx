@@ -2,13 +2,17 @@
 import { useLanguage } from "@/components/LanguageProvider";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { captureFailure } from "@/lib/telemetry";
 export default function ErrorPage({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
   const { t, locale } = useLanguage();
+  useEffect(() => { if (!error.digest) captureFailure(error, "react.error"); }, [error]);
   return (
     <main id="main-content" tabIndex={-1} className="shell not-found">
       <h1>{t("This page couldn’t load")}</h1>

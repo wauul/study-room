@@ -36,6 +36,6 @@ export async function POST(
       isHost: room.hostUserId === user.id,
     });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }

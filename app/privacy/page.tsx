@@ -9,7 +9,7 @@ export default async function Privacy() {
       <Header />
       <main id="main-content" tabIndex={-1} className="shell article-page">
         <h1>{t("Privacy, in plain words")}</h1>
-        <p className="post-date">{t("Last updated 15 September 2026")}</p>
+        <p className="post-date">{t("Last updated 3 October 2026")}</p>
         <div className="prose">
           <h2>{t("Essential storage")}</h2>
           <p>
@@ -23,6 +23,9 @@ export default async function Privacy() {
               "Accounts, room membership, extracted notes, discussions and quiz results are stored in Neon. Room participants can access shared material. Relevant passages are sent to Groq to generate answers. Personalized emails are delivered through Resend when requested.",
             )}
           </p>
+          <h2>{t("Application diagnostics")}</h2>
+          <p>{t("We use Sentry, with data stored in the European Union, to detect application failures and measure performance. Diagnostic events contain error types, code locations, sanitized route patterns, timings, counts and release identifiers. We remove exception text, account identifiers, emails, credentials, invite tokens, document names and content, study questions, answers, quiz submissions and generated reports before sending these events. Sentry receives network connection information when a browser sends diagnostics.")}</p>
+          <p>{t("Session replay and profiling are disabled by default. Replay requires a separate, explicit consent step before it can start. If enabled, page text and inputs are masked, study panes and documents are blocked, and network bodies are excluded. Application source maps are uploaded separately to make code locations readable; they contain application code, not your study material.")}</p>
           <h2>{t("Newsletter")}</h2>
           <p>
             {t(

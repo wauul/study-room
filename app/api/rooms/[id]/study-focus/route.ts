@@ -27,6 +27,6 @@ export async function PATCH(
     });
     return NextResponse.json({ ok: true, focus });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }

@@ -1,3 +1,4 @@
+import { operation } from "./telemetry";
 import React from "react";
 import {
   Document,
@@ -38,88 +39,92 @@ const styles = StyleSheet.create({
   },
 });
 export async function personalizedPdf(roomId: string, participantId: string) {
-  const t = translator(await getLocale());
-  const room = await db.room.findUniqueOrThrow({
-    where: { id: roomId },
-    include: { summary: true },
-  });
-  const participant = await db.participant.findFirstOrThrow({
-    where: { id: participantId, roomId },
-    include: {
-      quizResults: {
-        include: { quizQuestion: true },
-        orderBy: { createdAt: "asc" },
+  return operation("pdf.export", {}, async () => {
+    const t = translator(await getLocale());
+    const room = await db.room.findUniqueOrThrow({
+      where: { id: roomId },
+      include: { summary: true },
+    });
+    const participant = await db.participant.findFirstOrThrow({
+      where: { id: participantId, roomId },
+      include: {
+        quizResults: {
+          include: { quizQuestion: true },
+          orderBy: { createdAt: "asc" },
+        },
       },
-    },
-  });
-  const result = summarySchema.parse(room.summary?.resultJson);
-  return renderToBuffer(
-    <Document title={`${room.name} — Study Room rundown`}>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>{room.name}</Text>
-        <Text style={styles.text}>
-          {t("SESSION RUNDOWN / Prepared for {name}", {
-            name: participant.displayName,
-          })}
-        </Text>
-        <Text style={styles.heading}>{t("What clicked")}</Text>
-        {result.wellUnderstood.length ? (
-          result.wellUnderstood.map((x, i) => (
-            <View key={i}>
-              <Text>{x.topic}</Text>
-              <Text style={styles.text}>{x.evidence}</Text>
-            </View>
-          ))
-        ) : (
+    });
+    const result = summarySchema.parse(room.summary?.resultJson);
+    return renderToBuffer(
+      <Document title={`${room.name} — Study Room rundown`}>
+        <Page size="A4" style={styles.page}>
+          <Text style={styles.title}>{room.name}</Text>
           <Text style={styles.text}>
-            {t("Not enough evidence of mastery yet.")}
+            {t("SESSION RUNDOWN / Prepared for {name}", {
+              name: participant.displayName,
+            })}
           </Text>
-        )}
-        <Text style={styles.heading}>{t("Worth another look")}</Text>
-        {result.strugglePoints.map((x, i) => (
-          <View key={i}>
-            <Text>
-              {x.topic} / {t(x.severity)}
+          <Text style={styles.heading}>{t("What clicked")}</Text>
+          {result.wellUnderstood.length ? (
+            result.wellUnderstood.map((x, i) => (
+              <View key={i}>
+                <Text>{x.topic}</Text>
+                <Text style={styles.text}>{x.evidence}</Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.text}>
+              {t("Not enough evidence of mastery yet.")}
             </Text>
-            <Text style={styles.text}>{x.evidence}</Text>
-            {x.explanation && <Text style={styles.text}>{x.explanation}</Text>}
-          </View>
-        ))}
-        <Text style={styles.heading}>{t("Your next study session")}</Text>
-        {result.studyTips.map((t, i) => (
-          <Text key={i} style={styles.text}>
-            {i + 1}. {t}
-          </Text>
-        ))}
-        <Text style={styles.text}>{result.suggestedNextSteps}</Text>
-        <Text style={styles.heading}>{t("Your confidence record")}</Text>
-        {participant.quizResults.length ? (
-          participant.quizResults.map((r, i) => (
-            <View key={r.id}>
-              <Text style={styles.text}>
-                {i + 1}. {r.quizQuestion.questionText}
+          )}
+          <Text style={styles.heading}>{t("Worth another look")}</Text>
+          {result.strugglePoints.map((x, i) => (
+            <View key={i}>
+              <Text>
+                {x.topic} / {t(x.severity)}
               </Text>
-              <Text style={styles.text}>
-                {t("Probabilities:")}{" "}
-                {(r.submittedDistribution as number[]).join("% / ")}% —{" "}
-                {t("Log score:")}{" "}
-                {r.zeroProbability ? "-Infinity" : r.score.toFixed(3)}
-              </Text>
+              <Text style={styles.text}>{x.evidence}</Text>
+              {x.explanation && (
+                <Text style={styles.text}>{x.explanation}</Text>
+              )}
             </View>
-          ))
-        ) : (
-          <Text style={styles.text}>
-            {t("No quiz submissions in this session.")}
-          </Text>
-        )}
-        <Text
-          style={styles.foot}
-          fixed
-          render={({ pageNumber, totalPages }) =>
-            `Study Room · ${t("A little clearer, together.")}                          ${pageNumber} / ${totalPages}`
-          }
-        />
-      </Page>
-    </Document>,
-  );
+          ))}
+          <Text style={styles.heading}>{t("Your next study session")}</Text>
+          {result.studyTips.map((t, i) => (
+            <Text key={i} style={styles.text}>
+              {i + 1}. {t}
+            </Text>
+          ))}
+          <Text style={styles.text}>{result.suggestedNextSteps}</Text>
+          <Text style={styles.heading}>{t("Your confidence record")}</Text>
+          {participant.quizResults.length ? (
+            participant.quizResults.map((r, i) => (
+              <View key={r.id}>
+                <Text style={styles.text}>
+                  {i + 1}. {r.quizQuestion.questionText}
+                </Text>
+                <Text style={styles.text}>
+                  {t("Probabilities:")}{" "}
+                  {(r.submittedDistribution as number[]).join("% / ")}% —{" "}
+                  {t("Log score:")}{" "}
+                  {r.zeroProbability ? "-Infinity" : r.score.toFixed(3)}
+                </Text>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.text}>
+              {t("No quiz submissions in this session.")}
+            </Text>
+          )}
+          <Text
+            style={styles.foot}
+            fixed
+            render={({ pageNumber, totalPages }) =>
+              `Study Room · ${t("A little clearer, together.")}                          ${pageNumber} / ${totalPages}`
+            }
+          />
+        </Page>
+      </Document>,
+    );
+  });
 }

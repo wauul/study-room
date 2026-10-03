@@ -61,6 +61,6 @@ export async function GET(
       latestRound,
     });
   } catch (e) {
-    return apiError(e);
+    return apiError(e, "http.request");
   }
 }
