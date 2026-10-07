@@ -1,10 +1,14 @@
 import { chunkText, type TextChunk } from "./chunking";
+import { checkDeadline } from "../work-budget";
+import { HttpError } from "../errors";
 import { tokenLength } from "./embeddings";
 /** Leave space for a query in the reranker's 512-token pair. Word counts alone
  * underestimate French text and code, so ingestion checks the actual tokenizer. */
 export async function prepareChunks(text: string): Promise<TextChunk[]> {
   const result: TextChunk[] = [];
   async function fit(chunk: TextChunk): Promise<void> {
+    checkDeadline();
+    if (result.length >= 200) throw new HttpError(413, "Split this document into smaller uploads (maximum 200 chunks).");
     const tokens = await tokenLength(chunk.content);
     if (tokens <= 384) {
       result.push({ ...chunk, position: result.length });

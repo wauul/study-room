@@ -85,6 +85,7 @@ export default function Header() {
         Study Room
       </Link>
       <nav className="desktop-nav" aria-label={t("Main navigation")}>
+        <Link href="/account" aria-current={path === "/account" ? "page" : undefined}>{t("Account")}</Link>
         <Link href="/" aria-current={path === "/" ? "page" : undefined}>
           {t("My rooms")}
         </Link>
@@ -178,6 +179,7 @@ export default function Header() {
             {t("Help")}
           </Link>
           <Link href="/rooms/new">{t("Create a room")}</Link>
+          <Link href="/account">{t("Account")}</Link>
           <Link href="/login">{t("Sign in")}</Link>
         </nav>
       )}

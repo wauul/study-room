@@ -149,6 +149,7 @@ export default function SummaryClient({ id }: { id: string }) {
               </div>
             </div>
             <div className="summary-actions">
+              <p className="muted">{t("AI-generated study guidance. Check explanations against your course material.")}</p>
               <button
                 onClick={pdf}
                 disabled={!!busy}

@@ -6,8 +6,10 @@ import { getPosts, getFaqs } from "@/lib/content";
 import { getLocale } from "@/lib/locale";
 import { translator } from "@/lib/i18n";
 import { apiError } from "@/lib/http";
+import { requestGuard, userGuard } from "@/lib/guardrails";
 export async function GET(req: Request) {
   try {
+    await requestGuard(req, "rooms", 60);
     const locale = await getLocale();
     const t = translator(locale);
     const posts = getPosts(locale),
@@ -63,7 +65,8 @@ export async function GET(req: Request) {
     const session = await getServerSession(authOptions);
     const userId = (session?.user as { id?: string } | undefined)?.id;
     if (userId) {
-      const access = { participants: { some: { userId } } };
+      await userGuard("rooms", userId, 30);
+      const access = { participants: { some: { userId, revokedAt: null } } };
       const filter = { contains: q, mode: "insensitive" as const };
       const [rooms, chunks, messages, summaries] = await Promise.all([
         db.room.findMany({
@@ -97,7 +100,7 @@ export async function GET(req: Request) {
         }),
         db.$queryRaw<
           { roomId: string; name: string }[]
-        >`SELECT s."roomId", r.name FROM "SessionSummary" s JOIN "Room" r ON r.id=s."roomId" WHERE EXISTS (SELECT 1 FROM "Participant" p WHERE p."roomId"=r.id AND p."userId"=${userId}) AND position(lower(${q}) in lower(s."resultJson"::text)) > 0 ORDER BY s."createdAt" DESC LIMIT 20`,
+        >`SELECT s."roomId", r.name FROM "SessionSummary" s JOIN "Room" r ON r.id=s."roomId" WHERE EXISTS (SELECT 1 FROM "Participant" p WHERE p."roomId"=r.id AND p."userId"=${userId} AND p."revokedAt" IS NULL) AND position(lower(${q}) in lower(s."resultJson"::text)) > 0 ORDER BY s."createdAt" DESC LIMIT 20`,
       ]);
       rooms.forEach((r) =>
         results.push({

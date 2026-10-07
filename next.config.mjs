@@ -11,7 +11,7 @@ const config = {
   },
   experimental: { clientTraceMetadata: ["sentry-trace", "baggage"] },
   outputFileTracingIncludes: {
-    '/api/rooms/*/documents': ['./node_modules/pdf-parse/dist/**/*', './node_modules/pdfjs-dist/legacy/build/**/*', './node_modules/@napi-rs/canvas*/**/*'],
+    '/api/rooms/*/documents': ['./node_modules/pdf-parse/dist/**/*', './node_modules/pdfjs-dist/legacy/build/**/*', './node_modules/@napi-rs/canvas*/**/*', './node_modules/@xenova/transformers/**/*', './node_modules/onnxruntime-node/dist/**/*', './node_modules/onnxruntime-node/bin/napi-v3/linux/x64/**/*', './node_modules/onnxruntime-node/bin/napi-v3/win32/x64/**/*', './node_modules/onnxruntime-web/**/*'],
     '/api/rooms/*/summary/*': ['./node_modules/pdfkit/js/standard-fonts/**/*', './node_modules/pdfkit/js/data/**/*'],
   },
   serverExternalPackages: [

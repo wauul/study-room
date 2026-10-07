@@ -18,11 +18,12 @@ export default async function Home() {
   const rooms = userId
     ? await db.room
         .findMany({
-          where: { participants: { some: { userId } } },
+          where: { participants: { some: { userId, revokedAt: null } } },
           include: {
             _count: { select: { participants: true, documents: true } },
           },
           orderBy: { createdAt: "desc" },
+          take: 50,
         })
         .catch(() => {
           failed = true;

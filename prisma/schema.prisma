@@ -71,6 +71,8 @@ model Room {
   status RoomStatus @default(ACTIVE)
   createdAt DateTime @default(now())
   endedAt DateTime?
+  invitations RoomInvitation[]
+  deliveries ReportDelivery[]
   documents Document[]
   participants Participant[]
   messages ChatMessage[]
@@ -114,6 +116,7 @@ model Participant {
   displayName String
   email String?
   joinedAt DateTime @default(now())
+  revokedAt DateTime?
   messages ChatMessage[]
   quizResults QuizResult[]
   lostClicks LostClick[]
@@ -197,4 +200,54 @@ model NewsletterSubscriber {
   unsubscribeToken String @unique
   createdAt DateTime @default(now())
   unsubscribedAt DateTime?
+}
+
+model GuardrailPolicy {
+  id String @id
+  config Json
+  updatedAt DateTime @default(now()) @updatedAt
+}
+model GuardrailBucket {
+  key String @id
+  used Int
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model SecurityAudit {
+  id String @id @default(cuid())
+  action String
+  actorId String?
+  targetId String?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+model RoomInvitation {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tokenHash String @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+}
+model ReportDelivery {
+  id String @id @default(cuid())
+  roomId String
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  participantId String
+  status String @default("reserved")
+  createdAt DateTime @default(now())
+  @@unique([roomId, participantId])
+}
+model EmailVerification {
+  tokenHash String @id
+  userId String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model GuardrailLease {
+  key String @id
+  owner String
+  expiresAt DateTime
 }

@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { membership } from "@/lib/auth";
-import { apiError } from "@/lib/http";
+import { apiError, checkOrigin } from "@/lib/http";
+import { deleteRoom } from "@/lib/deletion";
+import { withLease } from "@/lib/work-budget";
 import { chatHistory } from "@/lib/chat-history";
+import { requestGuard } from "@/lib/guardrails";
 export async function GET(
-  _: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requestGuard(req, "rooms", 60);
     const { id } = await params;
     const { room, user } = await membership(id);
     const [documents, messages, participants, latestRound] = await Promise.all([
@@ -33,7 +37,7 @@ export async function GET(
       }),
       chatHistory(id),
       db.participant.findMany({
-        where: { roomId: id },
+        where: { roomId: id, revokedAt: null },
         select: { id: true, displayName: true },
       }),
       db.quizQuestion.findFirst({
@@ -63,4 +67,16 @@ export async function GET(
   } catch (e) {
     return apiError(e, "http.request");
   }
+}
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    checkOrigin(req); await requestGuard(req, "rooms", 5);
+    const { id } = await params;
+    const { user } = await membership(id, true);
+    await withLease(`delete:${id}`, () => db.$transaction(async tx => {
+      await deleteRoom(tx, id);
+      await tx.securityAudit.create({ data: { action: "room.delete", actorId: user.id } });
+    }));
+    return Response.json({ ok: true });
+  } catch (error) { return apiError(error); }
 }

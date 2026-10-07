@@ -14,6 +14,7 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "test": "tsx --test tests/*.test.ts",
+    "test:guardrails:integration": "tsx tests/guardrails-integration.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -45,6 +46,9 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-pgvector": "^0.0.9",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@sentry/cli": "3.8.0",
     "@types/node": "^22.0.0",
     "@types/pdf-parse": "^1.1.5",
@@ -62,7 +66,7 @@
   },
   "overrides": {
     "protobufjs": "^7.6.3",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "postcss": "^8.5.23",
     "effect": "^3.20.0",
     "deepmerge-ts": "^8.0.0"

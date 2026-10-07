@@ -9,7 +9,7 @@ export default async function Privacy() {
       <Header />
       <main id="main-content" tabIndex={-1} className="shell article-page">
         <h1>{t("Privacy, in plain words")}</h1>
-        <p className="post-date">{t("Last updated 3 October 2026")}</p>
+        <p className="post-date">{t("Last updated 7 October 2026")}</p>
         <div className="prose">
           <h2>{t("Essential storage")}</h2>
           <p>
@@ -26,6 +26,10 @@ export default async function Privacy() {
           <h2>{t("Application diagnostics")}</h2>
           <p>{t("We use Sentry, with data stored in the European Union, to detect application failures and measure performance. Diagnostic events contain error types, code locations, sanitized route patterns, timings, counts and release identifiers. We remove exception text, account identifiers, emails, credentials, invite tokens, document names and content, study questions, answers, quiz submissions and generated reports before sending these events. Sentry receives network connection information when a browser sends diagnostics.")}</p>
           <p>{t("Session replay and profiling are disabled by default. Replay requires a separate, explicit consent step before it can start. If enabled, page text and inputs are masked, study panes and documents are blocked, and network bodies are excluded. Application source maps are uploaded separately to make code locations readable; they contain application code, not your study material.")}</p>
+          <h2>{t("Retention and deletion")}</h2>
+          <p>{t("Rooms and their study material are scheduled for deletion 90 days after creation by default. The operator can shorten or extend this period between 7 and 365 days. Accounts remain until deleted. Delete your account in Account to remove hosted rooms and your personal participation records. Hosts can delete rooms and active-room documents. Unsubscribed newsletter records are scheduled for removal after 30 days. Diagnostic retention is controlled separately by the service operator.")}</p>
+          <h2>{t("Security checks")}</h2>
+          <p>{t("Cloudflare Turnstile checks password signup, login, and email verification requests. Network addresses are used to limit abuse; stored rate-limit identities are keyed hashes. Email ownership must be verified before using paid study features. Minimal security events record actions and internal record identifiers, without passwords, study text, or email content.")}</p>
           <h2>{t("Newsletter")}</h2>
           <p>
             {t(

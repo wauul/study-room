@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../db";
 import { chunkText } from "./chunking";
 import { embed } from "./embeddings";
+import { checkDeadline } from "../work-budget";
 import { prepareChunks } from "./prepare-chunks";
 export async function ingest(
   roomId: string,
@@ -24,11 +25,14 @@ export async function ingest(
     const embedded: (ReturnType<typeof chunkText>[number] & {
       vector: string;
     })[] = [];
-    for (const chunk of chunks)
+    for (const chunk of chunks) {
+      checkDeadline();
       embedded.push({
         ...chunk,
         vector: JSON.stringify(await embed(chunk.content)),
       });
+    }
+    checkDeadline();
     return db.$transaction(
       async (tx) => {
         const document = await tx.document.create({

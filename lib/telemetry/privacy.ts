@@ -10,6 +10,7 @@ import type {
 
 const operations = new Set([
   "http.request",
+  "guardrail.threshold",
   "react.error",
   "react.global-error",
   "auth.database",

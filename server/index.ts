@@ -15,7 +15,7 @@ import { z } from "zod";
 import { db } from "../lib/db";
 import { verifyRoomToken } from "../lib/tokens";
 import { retrieve, RetrievedChunk } from "../lib/rag/retrieval";
-import { groq, model } from "../lib/ai";
+import { completion, model } from "../lib/ai";
 import { answerPrompt } from "../lib/rag/answer-prompt";
 import { supportedPassages } from "../lib/rag/evidence";
 import { Heatmap } from "../lib/realtime/heatmap";
@@ -26,6 +26,10 @@ import {
 } from "../lib/scoring/properScoringRule";
 import { buildSummary } from "../lib/summary";
 import type { Room, QuizQuestion } from "@prisma/client";
+import { featureEnabled, rateLimit, userGuard, requestIp, privateKey } from "../lib/guardrails";
+import { HttpError } from "../lib/errors";
+import { withLease, withDeadline } from "../lib/work-budget";
+import { randomUUID } from "node:crypto";
 type Round = {
   question: QuizQuestion;
   eligible: Set<string>;
@@ -33,6 +37,7 @@ type Round = {
   writes: Set<Promise<unknown>>;
   locking: boolean;
   timer: NodeJS.Timeout;
+  revealAttempts?: number;
 };
 type State = {
   heat: Heatmap;
@@ -58,6 +63,7 @@ const origins = (process.env.APP_ORIGIN || "http://localhost:3000")
 const io = new Server(http, {
   cors: { origin: origins, credentials: true },
   maxHttpBufferSize: 20000,
+  allowRequest: (req, done) => done(null, origins.includes(req.headers.origin || "")),
 });
 io.use(async (socket, next) => {
   if (
@@ -69,9 +75,23 @@ io.use(async (socket, next) => {
     return;
   }
   try {
+    const ip = requestIp(new Headers(socket.handshake.headers as HeadersInit), process.env, socket.handshake.address);
+    await rateLimit("realtime", `connect-ip:${ip}`, 30);
     socket.data = await verifyRoomToken(
       z.string().parse(socket.handshake.auth.token),
     );
+    socket.data.ip = ip;
+    await userGuard("realtime", socket.data.userId, 10);
+    const owner = randomUUID(), prefix = `socket:${privateKey(socket.data.userId)}:`;
+    const key = prefix + owner;
+    await db.$transaction(async tx => {
+      const lock = await tx.$queryRaw<unknown[]>`SELECT key FROM "GuardrailLease" WHERE key='policy-lock' FOR UPDATE`;
+      if (!lock.length) throw new HttpError(503, "Safety controls are unavailable.");
+      if (await tx.guardrailLease.count({ where: { key: { startsWith: prefix }, expiresAt: { gt: new Date() } } }) >= 5)
+        throw new HttpError(429, "Too many live connections.");
+      await tx.guardrailLease.create({ data: { key, owner, expiresAt: new Date(socket.data.expiresAt) } });
+    });
+    socket.data.connectionLease = key;
     next();
   } catch (error) {
     // Invalid/expired JWTs and malformed credentials are expected. Database/configuration failures are not.
@@ -125,10 +145,10 @@ async function state(id: string): Promise<State> {
 async function roomFor(socket: Socket, host = false, active = true) {
   const { roomId, participantId, userId } = socket.data;
   const participant = await db.participant.findFirst({
-    where: { id: participantId, roomId, userId },
-    include: { room: true },
+    where: { id: participantId, roomId, userId, revokedAt: null },
+    include: { room: true, user: { select: { emailVerified: true } } },
   });
-  if (!participant || (host && participant.room.hostUserId !== userId))
+  if (!participant || !participant.user.emailVerified || socket.data.expiresAt <= Date.now() || (host && participant.room.hostUserId !== userId))
     throw new ExpectedError("You do not have permission for this action.");
   if (active && participant.room.status !== "ACTIVE")
     throw new ExpectedError("This session has ended.");
@@ -210,10 +230,12 @@ async function revealRound(roomId: string, round: Round) {
   } catch (error) {
     captureFailure(error, "quiz.reveal");
     round.locking = false;
-    round.timer = setTimeout(() => void reveal(roomId, round), 2000);
+    round.revealAttempts = (round.revealAttempts || 0) + 1;
+    if (round.revealAttempts < 3) round.timer = setTimeout(() => void reveal(roomId, round), 2000);
+    else { const s = await state(roomId); s.round = undefined; }
     io.to(channel(roomId)).emit(
       "room-error",
-      "Saving the round failed; retrying.",
+      round.revealAttempts < 3 ? "Saving the round failed; retrying." : "Saving the round failed. Reload to recover the round.",
     );
   }
 }
@@ -291,7 +313,7 @@ async function answer(
         });
         let receivedToken = false;
         try {
-          const stream = await groq().chat.completions.create({
+          const stream = await completion({
             model: process.env.GROQ_ANSWER_MODEL || model(),
             temperature: 0.1,
             stream: true,
@@ -379,6 +401,7 @@ async function drainSimplifications(room: Room, s: State) {
   s.simplified.add(messageId);
   s.answering = true;
   try {
+    await withLease(`generation:${room.id}`, async () => {
     const message = await db.chatMessage.findUniqueOrThrow({
       where: { id: messageId },
     });
@@ -400,6 +423,7 @@ async function drainSimplifications(room: Room, s: State) {
         similarity: 1,
       })),
     );
+    });
   } catch (error) {
     s.simplified.delete(messageId);
     throw error;
@@ -419,6 +443,12 @@ io.on("connection", (socket) => {
         async () => {
           const ack = typeof traceOrAck === "function" ? traceOrAck : maybeAck;
           try {
+            if (!socket.data.smoke) {
+              if (socket.data.expiresAt <= Date.now()) { socket.disconnect(true); throw new ExpectedError("Session expired. Reload this page."); }
+              await rateLimit("realtime", `event-ip:${socket.data.ip}`, 120);
+              await userGuard("realtime", socket.data.userId, 60);
+              await roomFor(socket, false, false);
+            }
             if (
               name !== "join-room" &&
               name !== "telemetry-smoke" &&
@@ -428,7 +458,7 @@ io.on("connection", (socket) => {
             if (name !== "join-room" && Date.now() - lastAction < 250)
               throw new ExpectedError("Please wait a moment.");
             lastAction = Date.now();
-            const result = await handler(payload);
+            const result = await withDeadline(() => handler(payload));
             if (typeof ack === "function")
               ack({ ok: true, ...((result as object) || {}) });
           } catch (error) {
@@ -437,7 +467,7 @@ io.on("connection", (socket) => {
             const safe =
               error instanceof z.ZodError
                 ? "Invalid request."
-                : error instanceof Error && !("status" in error)
+                : error instanceof ExpectedError || error instanceof HttpError
                   ? error.message
                   : "The AI service is unavailable. Please try again shortly.";
             socket.emit("room-error", safe);
@@ -495,6 +525,7 @@ io.on("connection", (socket) => {
       .object({ question: z.string().trim().min(3).max(2000) })
       .parse(payload);
     const room = await roomFor(socket);
+    await userGuard("ai", socket.data.userId, 5);
     const s = await state(room.id);
     if (s.answering || s.ending)
       throw new ExpectedError("Please wait for the current answer to finish.");
@@ -512,7 +543,7 @@ io.on("connection", (socket) => {
         ...message,
         displayName: socket.data.displayName,
       });
-      await answer(room, question, s);
+      await withLease(`generation:${room.id}`, () => answer(room, question, s));
     } finally {
       s.answering = false;
       await drainSimplifications(room, s);
@@ -551,6 +582,7 @@ io.on("connection", (socket) => {
     });
     io.to(channel(room.id)).emit("lost-count", { messageId, count });
     if (count >= 3 || count >= Math.ceil(peers(room.id).length / 2)) {
+      await userGuard("ai", socket.data.userId, 5);
       if (!s.simplified.has(messageId)) s.pendingLost.add(messageId);
       await drainSimplifications(room, s);
     }
@@ -563,7 +595,9 @@ io.on("connection", (socket) => {
       throw new ExpectedError("Finish the current round first.");
     s.generating = true;
     try {
-      const question = await generateQuestion(room);
+      await userGuard("ai", socket.data.userId, 5);
+      if (await db.quizQuestion.count({ where: { roomId: room.id } }) >= 100) throw new ExpectedError("This room has reached its 100-round quiz limit.");
+      const question = await withLease(`generation:${room.id}`, () => generateQuestion(room));
       const round: Round = {
         question,
         eligible: new Set(peers(room.id).map((p) => p.id)),
@@ -646,19 +680,41 @@ io.on("connection", (socket) => {
     s.ending = true;
     io.to(channel(room.id)).emit("session-ending");
     try {
-      await buildSummary(room.id, s.heat.snapshot());
+      await userGuard("ai", socket.data.userId, 5);
+      await withLease(`generation:${room.id}`, () => buildSummary(room.id, s.heat.snapshot()));
       io.to(channel(room.id)).emit("session-ended", { roomId: room.id });
     } finally {
       s.ending = false;
     }
   });
   socket.on("disconnect", () => {
+    if (socket.data.connectionLease) void db.guardrailLease.deleteMany({ where: { key: socket.data.connectionLease } }).catch(error => captureFailure(error, "realtime.authenticate"));
     io.to(channel(socket.data.roomId)).emit(
       "presence",
       peers(socket.data.roomId),
     );
   });
+  if (!socket.data.smoke) {
+    const expiry = setTimeout(() => socket.disconnect(true), Math.max(0, socket.data.expiresAt - Date.now()));
+    socket.once("disconnect", () => clearTimeout(expiry));
+  }
 });
+let checkingAccess = false;
+const accessTimer = setInterval(async () => {
+  if (checkingAccess) return;
+  const sockets = [...io.sockets.sockets.values()].filter(s => !s.data.smoke);
+  if (!sockets.length) return;
+  checkingAccess = true;
+  try {
+    await featureEnabled("realtime");
+    const participants = await db.participant.findMany({ where: { id: { in: sockets.map(s => s.data.participantId) }, revokedAt: null, user: { emailVerified: { not: null } } }, select: { id: true } });
+    const allowed = new Set(participants.map(p => p.id));
+    for (const socket of sockets) if (!allowed.has(socket.data.participantId) || socket.data.expiresAt <= Date.now()) socket.disconnect(true);
+  } catch (error) {
+    for (const socket of sockets) socket.disconnect(true);
+    captureFailure(error, "realtime.authenticate");
+  } finally { checkingAccess = false; }
+}, 2000).unref();
 const heatTimer = setInterval(() => {
   if (!states.size) return;
   return isolatedOperation("realtime.heatmap", () => {
@@ -708,6 +764,7 @@ async function shutdown(code: number, error?: unknown) {
   // A hung DB/provider must never keep a broken process alive.
   const deadline = setTimeout(() => process.exit(code), 5000);
   clearInterval(heatTimer);
+  clearInterval(accessTimer);
   for (const s of states.values()) if (s.round) clearTimeout(s.round.timer);
   if (error) captureFailure(error, "realtime.startup");
   try {

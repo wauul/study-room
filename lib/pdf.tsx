@@ -6,12 +6,12 @@ import {
   Text,
   View,
   StyleSheet,
-  renderToBuffer,
 } from "@react-pdf/renderer";
 import { db } from "./db";
 import { summarySchema } from "./summary";
 import { getLocale } from "./locale";
 import { translator } from "./i18n";
+import { renderPdf } from "./pdf-render-worker";
 const styles = StyleSheet.create({
   page: {
     padding: 42,
@@ -55,10 +55,11 @@ export async function personalizedPdf(roomId: string, participantId: string) {
       },
     });
     const result = summarySchema.parse(room.summary?.resultJson);
-    return renderToBuffer(
+    return renderPdf(
       <Document title={`${room.name} — Study Room rundown`}>
         <Page size="A4" style={styles.page}>
           <Text style={styles.title}>{room.name}</Text>
+          <Text style={styles.text}>{t("AI-generated study guidance. Check explanations against your course material.")}</Text>
           <Text style={styles.text}>
             {t("SESSION RUNDOWN / Prepared for {name}", {
               name: participant.displayName,

@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { membership, HttpError } from "@/lib/auth";
+import { membership, HttpError, verified } from "@/lib/auth";
+import { requestGuard, userGuard } from "@/lib/guardrails";
+import { jsonBody } from "@/lib/request-body";
+import { withLease } from "@/lib/work-budget";
 import { simpler, summarySchema } from "@/lib/summary";
 import { apiError, checkOrigin } from "@/lib/http";
 export async function GET(
-  _: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requestGuard(req, "rooms", 60);
     const { id } = await params;
     const { room, participant, user } = await membership(id);
     const summary = await db.sessionSummary.findUnique({
@@ -39,11 +43,14 @@ export async function POST(
 ) {
   try {
     checkOrigin(req);
+    await requestGuard(req, "ai", 10);
     const { id } = await params;
-    await membership(id);
+    const { user } = await membership(id);
+    verified(user); await userGuard("ai", user.id, 5);
     const { sourceChunkId } = z
-      .object({ sourceChunkId: z.string() })
-      .parse(await req.json());
+      .object({ sourceChunkId: z.string().max(100) })
+      .parse(await jsonBody(req));
+    return await withLease(`summary:${id}`, async () => {
     const summary = await db.sessionSummary.findUniqueOrThrow({
       where: { roomId: id },
     });
@@ -58,6 +65,7 @@ export async function POST(
       data: { resultJson: data },
     });
     return NextResponse.json({ explanation: point.explanation });
+    });
   } catch (e) {
     return apiError(e, "summary.generate");
   }

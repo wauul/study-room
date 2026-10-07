@@ -1,8 +1,8 @@
 import { SignJWT, jwtVerify } from "jose";
 function key() {
-  if (!process.env.NEXTAUTH_SECRET)
-    throw new Error("NEXTAUTH_SECRET is missing");
-  return new TextEncoder().encode(process.env.NEXTAUTH_SECRET);
+  if (!process.env.SOCKET_SIGNING_SECRET)
+    throw new Error("SOCKET_SIGNING_SECRET is missing");
+  return new TextEncoder().encode(process.env.SOCKET_SIGNING_SECRET);
 }
 export async function roomToken(
   roomId: string,
@@ -14,7 +14,7 @@ export async function roomToken(
     .setProtectedHeader({ alg: "HS256" })
     .setAudience("study-room-socket")
     .setIssuedAt()
-    .setExpirationTime("2h")
+    .setExpirationTime("30m")
     .sign(key());
 }
 export async function verifyRoomToken(token: string) {
@@ -32,5 +32,6 @@ export async function verifyRoomToken(token: string) {
     roomId: payload.roomId,
     participantId: payload.participantId,
     userId: payload.sub,
+    expiresAt: (payload.exp || 0) * 1000,
   };
 }

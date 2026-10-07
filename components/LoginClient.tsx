@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { Eye, EyeOff, Github } from "lucide-react";
 import { signInError, signInReturnPath } from "@/lib/auth-navigation";
 import Header from "@/components/Header";
+import BotCheck from "@/components/BotCheck";
 export default function LoginClient({
   enabledProviders,
 }: {
@@ -13,6 +14,7 @@ export default function LoginClient({
 }) {
   const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
+  const [botToken, setBotToken] = useState(""), [botReset, setBotReset] = useState(0), [notice, setNotice] = useState("");
   const [providerBusy, setProviderBusy] = useState("");
   const [register, setRegister] = useState(false),
     [error, setError] = useState(""),
@@ -47,13 +49,17 @@ export default function LoginClient({
         const r = await fetch("/api/auth/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ email, password, botToken }),
         });
         if (!r.ok) throw new Error((await r.json()).error);
+        setRegister(false);
+        setNotice("Account created. Sign in, then verify your email in Account.");
+        return;
       }
       const result = await signIn("credentials", {
         email,
         password,
+        botToken,
         redirect: false,
       });
       if (result?.error)
@@ -62,6 +68,8 @@ export default function LoginClient({
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
+    } finally {
+      setBusy(false); setBotReset(value => value + 1);
     }
   }
   return (
@@ -158,6 +166,8 @@ export default function LoginClient({
               <span>{t("or use your email")}</span>
             </div>
             <form onSubmit={submit}>
+              {notice && <p role="status">{t(notice)}</p>}
+              <BotCheck action={register ? "signup" : "login"} onToken={setBotToken} resetKey={botReset} />
               <label>
                 {t("Email address")}
                 <input
@@ -205,7 +215,7 @@ export default function LoginClient({
                   {t(error)}
                 </div>
               )}
-              <button disabled={busy || !!providerBusy} aria-busy={busy}>
+              <button disabled={busy || !!providerBusy || !botToken} aria-busy={busy}>
                 {busy
                   ? register
                     ? t("Creating account…")

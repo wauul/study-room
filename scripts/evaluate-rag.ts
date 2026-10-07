@@ -8,7 +8,7 @@ import { db } from "../lib/db";
 import { retrieve } from "../lib/rag/retrieval";
 import { answerPrompt } from "../lib/rag/answer-prompt";
 import { supportedPassages } from "../lib/rag/evidence";
-import { groq, model } from "../lib/ai";
+import { completion, model } from "../lib/ai";
 type Case = {
   filename: string;
   question: string;
@@ -51,7 +51,7 @@ async function main() {
     const t = performance.now();
     let ttftMs = 0,
       answer = "";
-    const stream = await groq().chat.completions.create({
+    const stream = await completion({
       model: process.env.GROQ_ANSWER_MODEL || model(),
       temperature: 0.1,
       stream: true,

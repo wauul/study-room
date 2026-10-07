@@ -6,6 +6,11 @@ import { compare } from "bcryptjs";
 import { db } from "./db";
 import { getServerSession } from "next-auth";
 import { captureFailure } from "./telemetry";
+import { HttpError } from "./errors";
+export { HttpError } from "./errors";
+import { featureEnabled, rateLimit, requestIp } from "./guardrails";
+import { verifyBot } from "./bot";
+import { minimizeProviderAccount } from "./provider-secrets";
 // NextAuth handles adapter errors internally, so capture them at the database boundary.
 const adapter = new Proxy(PrismaAdapter(db), {
   get(target, property, receiver) {
@@ -13,6 +18,8 @@ const adapter = new Proxy(PrismaAdapter(db), {
     if (typeof method !== "function") return method;
     return async (...args: unknown[]) => {
       try {
+        if (property === "createUser") await featureEnabled("signup");
+        if (property === "linkAccount") args[0] = minimizeProviderAccount(args[0] as Record<string, unknown>);
         return await Reflect.apply(method, target, args);
       } catch (error) {
         captureFailure(error, "auth.database");
@@ -33,13 +40,17 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
+        const ip = requestIp(new Headers(req.headers as HeadersInit));
+        await rateLimit("realtime", `login-ip:${ip}`, 10);
         if (
           !credentials?.email ||
           !credentials.password ||
-          credentials.password.length > 72
+          Buffer.byteLength(credentials.password, "utf8") > 72
         )
           return null;
+        await rateLimit("realtime", `login-email:${credentials.email.trim().toLowerCase()}`, 10, 900);
+        await verifyBot(req.body?.botToken, "login", ip);
         let user;
         try {
           user = await db.user.findUnique({
@@ -84,25 +95,23 @@ export async function requireUser() {
   const session = await getServerSession(authOptions);
   const id = (session?.user as { id?: string } | undefined)?.id;
   if (!id) throw new HttpError(401, "Please sign in.");
-  return { id, email: session?.user?.email ?? "" };
+  const user = await db.user.findUnique({ where: { id }, select: { id: true, email: true, emailVerified: true } });
+  if (!user) throw new HttpError(401, "Please sign in.");
+  return user;
 }
-export class HttpError extends Error {
-  readonly expected: boolean;
-  constructor(
-    public status: number,
-    message: string,
-    options?: ErrorOptions,
-  ) {
-    super(message, options);
-    this.name = "HttpError";
-    this.expected = status >= 400 && status < 500;
-  }
+export async function requireVerifiedUser() {
+  const user = await requireUser();
+  verified(user);
+  return user;
+}
+export function verified(user: { emailVerified: Date | null }) {
+  if (!user.emailVerified) throw new HttpError(403, "Verify your email in Account before using this feature.");
 }
 export async function membership(roomId: string, hostOnly = false) {
   const user = await requireUser();
   const room = await db.room.findUnique({
     where: { id: roomId },
-    include: { participants: { where: { userId: user.id } } },
+    include: { participants: { where: { userId: user.id, revokedAt: null } } },
   });
   if (!room) throw new HttpError(404, "Room not found.");
   if (hostOnly ? room.hostUserId !== user.id : !room.participants.length)

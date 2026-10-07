@@ -1,0 +1,25 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+      - run: npm run build
+        env:
+          DATABASE_URL: postgresql://unused:unused@127.0.0.1:1/unused
+          NEXTAUTH_SECRET: ci-only-not-a-production-secret
+      - run: npm run server:build
+      - run: npm run test:guardrails:integration

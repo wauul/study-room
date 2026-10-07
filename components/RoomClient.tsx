@@ -189,6 +189,7 @@ export default function RoomClient({ id }: { id: string }) {
   >({});
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyBusy, setHistoryBusy] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<{ url: string; label: string } | null>(null);
   const messagesRef = useRef(messages),
     historyInitialized = useRef(false),
     prepending = useRef(false),
@@ -314,14 +315,15 @@ export default function RoomClient({ id }: { id: string }) {
       const r = await fetch(`/api/rooms/${id}/join`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ displayName }),
+        body: JSON.stringify({ displayName, invite: new URLSearchParams(window.location.hash.slice(1)).get("invite") || undefined }),
       });
       const body = await r.json();
       if (r.status === 401) {
-        window.location.href = `/login?next=/rooms/${id}`;
+        window.location.href = `/login?next=${encodeURIComponent(`/rooms/${id}${window.location.hash}`)}`;
         return;
       }
       if (!r.ok) throw new Error(body.error);
+      window.history.replaceState(null, "", `/rooms/${id}`);
       participant.current = body.participantId;
       setHost(body.isHost);
       setJoined(true);
@@ -366,7 +368,17 @@ export default function RoomClient({ id }: { id: string }) {
         emitWithTrace(s, "join-room", {}, body.socketUrl, () => {});
         void load();
       });
-      s.on("disconnect", () => setConnected(false));
+      s.on("disconnect", async (reason) => {
+        setConnected(false);
+        if (reason === "io server disconnect") {
+          try {
+            const response = await fetch(`/api/rooms/${id}/join`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName }) });
+            const fresh = await response.json();
+            if (!response.ok) throw new Error(fresh.error);
+            s.auth = { token: fresh.token }; s.connect();
+          } catch (error) { setError((error as Error).message); }
+        }
+      });
       let renewing = false;
       s.on("connect_error", async (connectionError: Error) => {
         setConnected(false);
@@ -590,12 +602,15 @@ export default function RoomClient({ id }: { id: string }) {
           </span>
           <button
             className="secondary"
+            disabled={!isHost}
             onClick={async () => {
               try {
-                await navigator.clipboard.writeText(window.location.href);
-                setNotice("Room link copied. Share it with your study group.");
+                const response = await fetch(`/api/rooms/${id}/invite`, { method: "POST" });
+                const invite = await response.json(); if (!response.ok) throw new Error(invite.error);
+                await navigator.clipboard.writeText(`${window.location.origin}/rooms/${id}#invite=${invite.token}`);
+                setNotice("Invitation copied. It expires in 24 hours.");
               } catch {
-                setNotice(window.location.href);
+                setError("Could not create or copy the invitation. Please try again.");
               }
             }}
           >
@@ -607,6 +622,7 @@ export default function RoomClient({ id }: { id: string }) {
               {t("End session")}
             </button>
           )}
+          {isHost && <button className="quiet" onClick={() => setPendingRemove({ url: `/api/rooms/${id}/invite`, label: "Revoke all invitations" })}>{t("Revoke invitations")}</button>}
         </div>
       </div>
       {error && (
@@ -704,6 +720,7 @@ export default function RoomClient({ id }: { id: string }) {
                 {t("Add study material")}
               </button>
             )}
+            {isHost && !!data?.documents.length && <button className="quiet" onClick={() => setPendingRemove({ url: `/api/rooms/${id}/documents/${selected || data.documents[0].id}`, label: "Delete selected document" })}>{t("Delete selected document")}</button>}
           </section>
           <section>
             <div className="row between">
@@ -738,6 +755,7 @@ export default function RoomClient({ id }: { id: string }) {
                     {p.id === participant.current ? t(" (you)") : ""}
                   </span>
                   <span className="dot" style={{ marginLeft: "auto" }} />
+                  {isHost && p.id !== participant.current && <button className="quiet" onClick={() => setPendingRemove({ url: `/api/rooms/${id}/members/${p.id}`, label: "Remove participant" })}>{t("Remove")}</button>}
                 </div>
               ))}
             </div>
@@ -915,6 +933,10 @@ export default function RoomClient({ id }: { id: string }) {
                       </div>
                       <div className="message-body">
                         <MessageBody content={m.content} />
+                        {!m.participantId && <small>{t("AI-generated. Check against the cited material.")}</small>}
+                        {m.status !== "streaming" && <div className="actions"><button className="quiet" onClick={async () => {
+                          try { const r = await fetch(`/api/rooms/${id}/messages/${m.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "unsafe" }) }); const result = await r.json(); if (!r.ok) throw new Error(result.error); setNotice("Message reported for review."); } catch (error) { setError((error as Error).message); }
+                        }}>{t("Report")}</button>{isHost && <button className="quiet" onClick={() => setPendingRemove({ url: `/api/rooms/${id}/messages/${m.id}`, label: "Remove message" })}>{t("Remove")}</button>}</div>}
                       </div>
                       {m.citations?.length ? (
                         <>
@@ -1294,6 +1316,11 @@ export default function RoomClient({ id }: { id: string }) {
           )}
         </section>
       </main>
+      {pendingRemove && <Dialog title={t(pendingRemove.label)} onClose={() => setPendingRemove(null)} busy={busy}>
+        <p>{t("Confirm this action. Removing a participant also revokes existing invitation links.")}</p>
+        <button disabled={busy} onClick={async () => { setBusy(true); try { const r = await fetch(pendingRemove.url, { method: "DELETE" }); const result = await r.json(); if (!r.ok) throw new Error(result.error); setPendingRemove(null); await load(); } catch (error) { setError((error as Error).message); } finally { setBusy(false); } }}>{t("Confirm")}</button>
+        <button className="secondary" disabled={busy} onClick={() => setPendingRemove(null)}>{t("Cancel")}</button>
+      </Dialog>}
       {modal && (
         <Dialog
           title={

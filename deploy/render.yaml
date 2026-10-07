@@ -14,6 +14,8 @@ services:
         sync: false
       - key: NEXTAUTH_SECRET
         sync: false
+      - key: SOCKET_SIGNING_SECRET
+        sync: false
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { HttpError } from "./auth";
+import { HttpError } from "./errors";
 import { unstable_rethrow } from "next/navigation";
 import { captureFailure } from "./telemetry";
 export function apiError(error: unknown, operation = "http.request") {
